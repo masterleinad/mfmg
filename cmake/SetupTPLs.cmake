@@ -2,9 +2,16 @@
 FIND_PACKAGE(MPI REQUIRED)
 
 #### Boost ###################################################################
-IF(DEFINED BOOST_DIR)
+
+IF(NOT DEFINED BOOST_DIR)
+SET(BOOST_DIR ${BOOST_DIR})
+  SET(BOOST_DIR "$ENV{BOOST_DIR}")
+ENDIF()
+
+IF(NOT DEFINED BOOST_ROOT)
   SET(BOOST_ROOT ${BOOST_DIR})
 ENDIF()
+
 SET(Boost_COMPONENTS
   unit_test_framework
   program_options
@@ -17,6 +24,11 @@ FIND_PACKAGE(deal.II 9.0 REQUIRED PATHS ${DEAL_II_DIR})
 IF(NOT DEAL_II_WITH_TRILINOS)
   MESSAGE(FATAL_ERROR 
           "Error! deal.II must be compiled with Trilinos support.")
+ENDIF()
+
+IF(NOT DEAL_II_WITH_ARPACK)
+  MESSAGE(FATAL_ERROR 
+          "Error! deal.II must be compiled with ARPACK support.")
 ENDIF()
 
 # If deal.II was configured in DebugRelease mode, then if mfmg was configured
@@ -37,6 +49,29 @@ ELSE()
     ADD_DEFINITIONS(-DDEBUG)
   ENDIF()
 ENDIF()
+
+#### LAPACKE #################################################################
+FIND_LIBRARY(LAPACKE_LIBRARY NAMES lapacke
+  HINTS ${LAPACK_DIR} $ENV{LAPACK_DIR}
+  PATH_SUFFIXES lib)
+FIND_PATH(LAPACKE_INCLUDE_DIR lapacke.h
+  HINTS ${LAPACK_DIR} $ENV{LAPACK_DIR}
+  PATH_SUFFIXES include)
+
+IF("${LAPACK_DIR}" STREQUAL "")
+  SET(LAPACK_DIR $ENV{LAPACK_DIR})
+ENDIF()
+FIND_PACKAGE(LAPACK REQUIRED)
+
+IF(NOT LAPACKE_INCLUDE_DIR OR NOT LAPACKE_LIBRARY)
+  MESSAGE(FATAL_ERROR 
+          "Error! Could not find LAPACKE.")
+ENDIF()
+
+ADD_LIBRARY(lapacke STATIC IMPORTED)
+SET_TARGET_PROPERTIES(lapacke PROPERTIES IMPORTED_LOCATION
+  ${LAPACKE_LIBRARY})
+SET(LAPACKE_LIBRARIES ${LAPACKE_LIBRARY} ${LAPACK_LIBRARY})
 
 #### AMGX ####################################################################
 IF(${MFMG_ENABLE_CUDA})
