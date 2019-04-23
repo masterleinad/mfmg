@@ -79,10 +79,6 @@ DealIIHierarchyHelpers<dim, VectorType>::build_restrictor(
   auto agglomerate_params = params->get_child("agglomeration");
   if (fast_ap)
   {
-    // TODO make it work with MPI
-    ASSERT(dealii::Utilities::MPI::n_mpi_processes(comm) == 1,
-           "fast_ap only works in serial");
-
     AMGe_host<dim, DealIIMeshEvaluator<dim>, VectorType> amge(
         comm, dealii_mesh_evaluator->get_dof_handler(), eigensolver_params);
     std::vector<double> eigenvalues;
@@ -112,7 +108,9 @@ DealIIHierarchyHelpers<dim, VectorType>::build_restrictor(
         delta_correction_acc;
     bool is_halo_agglomerate = false;
     unsigned int const n_local_eigenvectors =
-        delta_correction_matrix.m() / interior_agglomerates.size();
+        interior_agglomerates.empty()
+            ? 0
+            : delta_correction_matrix.m() / interior_agglomerates.size();
     for (auto const &agglomerates_vector :
          {interior_agglomerates, halo_agglomerates})
     {
@@ -139,6 +137,10 @@ DealIIHierarchyHelpers<dim, VectorType>::build_restrictor(
             amge.build_agglomerate_triangulation(*agglomerate_it,
                                                  agglomerate_triangulation,
                                                  patch_to_global_map);
+            if (patch_to_global_map.empty())
+	    {
+              return;
+	    }
 
             // Now that we have the triangulation, we can do the evaluation on
             // the agglomerate
@@ -232,9 +234,13 @@ DealIIHierarchyHelpers<dim, VectorType>::build_restrictor(
 #pragma GCC diagnostic pop
 
     for (unsigned int row = 0; row < eigenvector_matrix->m(); ++row)
+    {
       for (auto column_iterator = eigenvector_matrix->begin(row);
            column_iterator != eigenvector_matrix->end(row); ++column_iterator)
+      {
         column_iterator->value() *= eigenvalues[row];
+      }
+    }
     eigenvector_matrix->compress(dealii::VectorOperation::insert);
 
     bool const transpose = true;

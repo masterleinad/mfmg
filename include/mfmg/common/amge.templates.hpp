@@ -94,6 +94,7 @@ AMGe<dim, VectorType>::build_boundary_agglomerates() const
   std::vector<std::set<unsigned int>> agg_cell_set(_n_agglomerates);
   for (auto cell : filtered_iterators_range)
   {
+    // std::cout << "cell->center(): " << cell->center() << std::endl;
     // The cell used_index 0 is reserved for artificial cell however to fill in
     // the vector we need to decrease the user_index by one to make sure that we
     // start filling the vector from the beginning.
@@ -734,6 +735,8 @@ void AMGe<dim, VectorType>::build_agglomerate_triangulation(
              typename dealii::DoFHandler<dim>::active_cell_iterator>
         &agglomerate_to_global_tria_map) const
 {
+  if (agglomerate.empty())
+    return;
   // Map between the cells on the boundary and the faces on the boundary and the
   // associated boundary id.
   std::map<typename dealii::DoFHandler<dim>::active_cell_iterator,

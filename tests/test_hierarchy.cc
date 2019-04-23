@@ -332,7 +332,7 @@ BOOST_AUTO_TEST_CASE(fast_multiply_transpose)
   MPI_Comm comm = MPI_COMM_WORLD;
   auto comm_size = dealii::Utilities::MPI::n_mpi_processes(comm);
   // For now fast_ap only work on serial
-  if (comm_size == 1)
+  //if (comm_size == 1)
   {
     using DVector = dealii::LinearAlgebra::distributed::Vector<double>;
     int constexpr dim = mfmg::DealIIMeshEvaluator<2>::_dim;
@@ -396,11 +396,11 @@ BOOST_AUTO_TEST_CASE(fast_multiply_transpose)
           BOOST_TEST(fast_matrix->el(i, j) == ref_matrix->el(i, j),
                      tt::tolerance(1e-9));
   }
-  else
+  /*else
   {
     // Do nothing. Fast ap only works in serial but the tests in test_hierarchy
     // are run in parallel.
-  }
+  }*/
 }
 
 BOOST_AUTO_TEST_CASE(fast_multiply_transpose_mf)
@@ -408,7 +408,7 @@ BOOST_AUTO_TEST_CASE(fast_multiply_transpose_mf)
   MPI_Comm comm = MPI_COMM_WORLD;
   auto comm_size = dealii::Utilities::MPI::n_mpi_processes(comm);
   // For now fast_ap only work on serial
-  if (comm_size == 1)
+  //if (comm_size == 1)
   {
     using DVector = dealii::LinearAlgebra::distributed::Vector<double>;
     int constexpr dim = mfmg::DealIIMatrixFreeMeshEvaluator<2>::_dim;
@@ -472,9 +472,9 @@ BOOST_AUTO_TEST_CASE(fast_multiply_transpose_mf)
           BOOST_TEST(fast_matrix->el(i, j) == ref_matrix->el(i, j),
                      tt::tolerance(1e-9));
   }
-  else
+  /*else
   {
     // Do nothing. Fast ap only works in serial but the tests in test_hierarchy
     // are run in parallel.
-  }
+  }*/
 }
