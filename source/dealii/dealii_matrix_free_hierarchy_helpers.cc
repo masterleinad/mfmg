@@ -76,10 +76,6 @@ DealIIMatrixFreeHierarchyHelpers<dim, VectorType>::build_restrictor(
   bool fast_ap = params->get("fast_ap", false);
   if (fast_ap)
   {
-    // TODO make it work with MPI
-    ASSERT(dealii::Utilities::MPI::n_mpi_processes(comm) == 1,
-           "fast_ap only works in serial");
-
     AMGe_host<dim, DealIIMatrixFreeMeshEvaluator<dim>, VectorType> amge(
         comm, dealii_mesh_evaluator->get_dof_handler(), eigensolver_params);
     std::vector<double> eigenvalues;
@@ -104,14 +100,19 @@ DealIIMatrixFreeHierarchyHelpers<dim, VectorType>::build_restrictor(
     std::vector<std::vector<unsigned int>> halo_agglomerates;
     std::tie(interior_agglomerates, halo_agglomerates) =
         amge.build_boundary_agglomerates();
+    if (interior_agglomerates[0].empty())
+    {
+             std::shared_ptr<Operator<VectorType>> op(
+      new DealIITrilinosMatrixOperator<VectorType>(restrictor_matrix));
+  return op;
+    }
+
     std::unordered_map<std::pair<unsigned int, unsigned int>, double,
                        boost::hash<std::pair<unsigned int, unsigned int>>>
         delta_correction_acc;
     bool is_halo_agglomerate = false;
     unsigned int const n_local_eigenvectors =
-        interior_agglomerates.empty()
-            ? 0
-            : delta_correction_matrix.m() / interior_agglomerates.size();
+            delta_correction_matrix.m() / interior_agglomerates.size();
     for (auto const &agglomerates_vector :
          {interior_agglomerates, halo_agglomerates})
     {
@@ -138,10 +139,6 @@ DealIIMatrixFreeHierarchyHelpers<dim, VectorType>::build_restrictor(
             amge.build_agglomerate_triangulation(*agglomerate_it,
                                                  agglomerate_triangulation,
                                                  patch_to_global_map);
-            if (patch_to_global_map.empty())
-            {
-              return;
-            }
 
             // Now that we have the triangulation, we can do the evaluation on
             // the agglomerate
@@ -231,9 +228,12 @@ DealIIMatrixFreeHierarchyHelpers<dim, VectorType>::build_restrictor(
 #pragma GCC diagnostic pop
 
     for (unsigned int row = 0; row < eigenvector_matrix->m(); ++row)
+    {
       for (auto column_iterator = eigenvector_matrix->begin(row);
            column_iterator != eigenvector_matrix->end(row); ++column_iterator)
+      {
         column_iterator->value() *= eigenvalues[row];
+      }}
     eigenvector_matrix->compress(dealii::VectorOperation::insert);
 
     bool const transpose = true;

@@ -111,7 +111,7 @@ double test(std::shared_ptr<boost::property_tree::ptree> params)
 typedef std::tuple<mfmg::DealIIMeshEvaluator<2>,
                    mfmg::DealIIMatrixFreeMeshEvaluator<2>>
     mesh_evaluator_types;
-BOOST_AUTO_TEST_CASE_TEMPLATE(benchmark, MeshEvaluator, mesh_evaluator_types)
+/*BOOST_AUTO_TEST_CASE_TEMPLATE(benchmark, MeshEvaluator, mesh_evaluator_types)
 {
   auto params = std::make_shared<boost::property_tree::ptree>();
   boost::property_tree::info_parser::read_info("hierarchy_input.info", *params);
@@ -325,14 +325,14 @@ dealii::TrilinosWrappers::SparseMatrix gimme_identity(unsigned int n_local_rows)
   }
   identity_matrix.compress(dealii::VectorOperation::insert);
   return identity_matrix;
-}
+}*/
 
 BOOST_AUTO_TEST_CASE(fast_multiply_transpose)
 {
   MPI_Comm comm = MPI_COMM_WORLD;
   auto comm_size = dealii::Utilities::MPI::n_mpi_processes(comm);
   // For now fast_ap only work on serial
-  if (comm_size == 1)
+  //if (comm_size == 1)
   {
     using DVector = dealii::LinearAlgebra::distributed::Vector<double>;
     int constexpr dim = mfmg::DealIIMeshEvaluator<2>::_dim;
@@ -395,20 +395,21 @@ BOOST_AUTO_TEST_CASE(fast_multiply_transpose)
         if (ref_matrix->el(i, j) > 1e-10)
           BOOST_TEST(fast_matrix->el(i, j) == ref_matrix->el(i, j),
                      tt::tolerance(1e-9));
+
   }
-  else
-  {
+  //else
+  //{
     // Do nothing. Fast ap only works in serial but the tests in test_hierarchy
     // are run in parallel.
-  }
+  //}
 }
 
-BOOST_AUTO_TEST_CASE(fast_multiply_transpose_mf)
+/*BOOST_AUTO_TEST_CASE(fast_multiply_transpose_mf)
 {
   MPI_Comm comm = MPI_COMM_WORLD;
   auto comm_size = dealii::Utilities::MPI::n_mpi_processes(comm);
   // For now fast_ap only work on serial
-  if (comm_size == 1)
+//  if (comm_size == 1)
   {
     using DVector = dealii::LinearAlgebra::distributed::Vector<double>;
     int constexpr dim = mfmg::DealIIMatrixFreeMeshEvaluator<2>::_dim;
@@ -472,9 +473,9 @@ BOOST_AUTO_TEST_CASE(fast_multiply_transpose_mf)
           BOOST_TEST(fast_matrix->el(i, j) == ref_matrix->el(i, j),
                      tt::tolerance(1e-9));
   }
-  else
-  {
-    // Do nothing. Fast ap only works in serial but the tests in test_hierarchy
-    // are run in parallel.
-  }
-}
+//  else
+//  {
+//    // Do nothing. Fast ap only works in serial but the tests in test_hierarchy
+//    // are run in parallel.
+//  }
+}*/
