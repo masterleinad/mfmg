@@ -28,5 +28,5 @@ laplace
 {
   distort_random false
   reordering None
-  n_refinements 1
+  n_refinements 2
 }

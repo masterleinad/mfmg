@@ -164,8 +164,8 @@ DealIIMatrixFreeHierarchyHelpers<dim, VectorType>::build_restrictor(
                 for (unsigned int k = 0; k < n_elem; ++k)
                 {
                   delta_eig[k] =
-                      delta_eigenvector_matrix->el(row, dof_indices_map[k]) +
-                      eigenvector_matrix->el(row, dof_indices_map[k]);
+                      delta_eigenvector_matrix->operator()(row, dof_indices_map[k]) +
+                      eigenvector_matrix->operator()(row, dof_indices_map[k]);
                 }
               }
               else
@@ -173,7 +173,7 @@ DealIIMatrixFreeHierarchyHelpers<dim, VectorType>::build_restrictor(
                 for (unsigned int k = 0; k < n_elem; ++k)
                 {
                   delta_eig[k] =
-                      delta_eigenvector_matrix->el(row, dof_indices_map[k]);
+                      delta_eigenvector_matrix->operator()(row, dof_indices_map[k]);
                 }
               }
 
