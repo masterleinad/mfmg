@@ -392,9 +392,15 @@ BOOST_AUTO_TEST_CASE(fast_multiply_transpose)
     // Compare the two matrices obtained
     for (unsigned int i = 0; i < ref_matrix->m(); ++i)
       for (unsigned int j = 0; j < ref_matrix->n(); ++j)
-        if (ref_matrix->el(i, j) > 1e-10)
+        if (ref_matrix->in_local_range(i) && fast_matrix->in_local_range(i) && ref_matrix->el(i, j) > 1e-10)
+	{
+	  if (std::abs(fast_matrix->el(i,j)-ref_matrix->el(i,j))>1.e-9*std::max(std::abs(fast_matrix->el(i,j)), std::abs(ref_matrix->el(i,j))))
+	  {
+		  std::cout << "Failing at position (" << i << "," << j << "): " << fast_matrix->el(i,j) << " should be " << ref_matrix->el(i,j) << std::endl; 
           BOOST_TEST(fast_matrix->el(i, j) == ref_matrix->el(i, j),
                      tt::tolerance(1e-9));
+	  }
+	}
 
   }
   //else

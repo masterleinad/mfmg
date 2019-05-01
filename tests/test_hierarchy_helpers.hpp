@@ -153,7 +153,7 @@ public:
       dealii::DoFHandler<dim> &, dealii::AffineConstraints<double> &,
       dealii::TrilinosWrappers::SparseMatrix &system_matrix) const override
   {
-    // TODO this is pretty expansive, we should use a shared pointer
+    // TODO this is pretty expensive, we should use a shared pointer
     system_matrix.copy_from(_matrix);
   }
 
@@ -167,17 +167,29 @@ public:
     dealii::FE_Q<dim> fe(fe_degree);
     dof_handler.distribute_dofs(fe);
 
+    std::cout << "n_dofs: " << dof_handler.n_dofs() << std::endl;
+    std::cout << "n_active_cells: " << dof_handler.get_triangulation().n_active_cells() << std::endl;
+
     dealii::IndexSet locally_relevant_dofs;
     dealii::DoFTools::extract_locally_relevant_dofs(dof_handler,
                                                     locally_relevant_dofs);
 
     // Compute the constraints
     constraints.clear();
-    constraints.reinit(locally_relevant_dofs);
+    //constraints.reinit(locally_relevant_dofs);
     dealii::DoFTools::make_hanging_node_constraints(dof_handler, constraints);
     dealii::VectorTools::interpolate_boundary_values(
         dof_handler, 1, dealii::Functions::ZeroFunction<dim>(), constraints);
     constraints.close();
+
+    for (const auto & cell: dof_handler.active_cell_iterators())
+    {
+	    for (unsigned int face_no = 0; face_no < dealii::GeometryInfo<dim>::faces_per_cell; ++face_no)
+		    if (cell->face(face_no)->at_boundary())
+			    std::cout << cell->face(face_no)->center() << " has bid " << cell->face(face_no)->boundary_id() << std::endl;
+    }
+
+    constraints.print(std::cout);
 
     // Build the system sparsity pattern and reinitialize the system sparse
     // matrix
@@ -197,10 +209,12 @@ public:
     dealii::FullMatrix<double> cell_matrix(dofs_per_cell, dofs_per_cell);
     std::vector<dealii::types::global_dof_index> local_dof_indices(
         dofs_per_cell);
-    for (auto cell :
+/*    for (auto cell :
          dealii::filter_iterators(dof_handler.active_cell_iterators(),
-                                  dealii::IteratorFilters::LocallyOwnedCell()))
+                                  dealii::IteratorFilters::LocallyOwnedCell()))*/
+    for (const auto &cell: dof_handler.active_cell_iterators())    
     {
+      std::cout << "cell center: " << cell->center() << std::endl;	    
       cell_matrix = 0;
       fe_values.reinit(cell);
 
@@ -210,9 +224,12 @@ public:
             _material_property->value(fe_values.quadrature_point(q_point));
         for (unsigned int i = 0; i < dofs_per_cell; ++i)
           for (unsigned int j = 0; j < dofs_per_cell; ++j)
+	  {
             cell_matrix(i, j) +=
                 diffusion_coefficient * fe_values.shape_grad(i, q_point) *
                 fe_values.shape_grad(j, q_point) * fe_values.JxW(q_point);
+	    //std::cout << "writing value " << cell_matrix(i,j) << std::endl;
+	  }
       }
 
       cell->get_dof_indices(local_dof_indices);

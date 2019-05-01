@@ -447,6 +447,8 @@ void AMGe<dim, VectorType>::compute_restriction_sparse_matrix(
             (diag_elements[i][j] / locally_relevant_global_diag[global_pos] -
              1.) *
                 eigenvectors[pos][j]);
+	if (local_range.first+pos==1 && global_pos==4)
+          std::cout << "delta_eigenvector(" << local_range.first + pos << "," << global_pos << "): " << eigenvectors[pos][j] << std::endl;
       }
       ++pos;
     }
@@ -750,13 +752,14 @@ void AMGe<dim, VectorType>::build_agglomerate_triangulation(
         {
           boundary_ids[cell].push_back(
               std::make_pair(f, cell->face(f)->boundary_id()));
+	  std::cout << cell->face(f)->center() << " is mapped to " << cell->face(f)->boundary_id() << std::endl;
         }
       }
     }
 
   // If the agglomerate has hanging nodes, the patch is bigger than
   // what we may expect because we cannot create a coarse triangulation with
-  // hanging nodes. Thus, we need to use FE_Nothing to get ride of unwanted
+  // hanging nodes. Thus, we need to use FE_Nothing to get rid off unwanted
   // cells.
   dealii::GridTools::build_triangulation_from_patch<dealii::DoFHandler<dim>>(
       agglomerate, agglomerate_triangulation, agglomerate_to_global_tria_map);
@@ -774,8 +777,11 @@ void AMGe<dim, VectorType>::build_agglomerate_triangulation(
                      });
     if (agg_cell != agglomerate_to_global_tria_map.end())
       for (auto &boundary_face : boundary.second)
+      {
         agg_cell->first->face(boundary_face.first)
             ->set_boundary_id(boundary_face.second);
+	std::cout << "Setting " << agg_cell->first->face(boundary_face.first)->center() << " to " << boundary_face.second << std::endl;
+      }
   }
 }
 } // namespace mfmg

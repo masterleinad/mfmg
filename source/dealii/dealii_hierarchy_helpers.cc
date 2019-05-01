@@ -94,10 +94,20 @@ DealIIHierarchyHelpers<dim, VectorType>::build_restrictor(
                           restrictor_matrix, eigenvector_matrix,
                           delta_eigenvector_matrix, eigenvalues);
 
-    std::cout << "delta_eigenvector_matrix:\n";
-    delta_eigenvector_matrix->print(std::cout);
-    std::cout << "eigenvector_matrix:\n";
-    eigenvector_matrix->print(std::cout);
+    std::ofstream delta_out(
+        "delta_out" +
+        dealii::Utilities::int_to_string(
+            dealii::Utilities::MPI::n_mpi_processes(comm)) +
+        dealii::Utilities::int_to_string(
+            dealii::Utilities::MPI::this_mpi_process(comm)));
+    delta_eigenvector_matrix->print(delta_out);
+    std::ofstream eigen_out(
+        "eigen_out" +
+        dealii::Utilities::int_to_string(
+            dealii::Utilities::MPI::n_mpi_processes(comm)) +
+        dealii::Utilities::int_to_string(
+            dealii::Utilities::MPI::this_mpi_process(comm)));
+    eigenvector_matrix->print(eigen_out);
 
     dealii::TrilinosWrappers::SparseMatrix delta_correction_matrix(
         eigenvector_matrix->locally_owned_range_indices(),
@@ -144,6 +154,16 @@ DealIIHierarchyHelpers<dim, VectorType>::build_restrictor(
         const auto &interior_agglomerate = agglomerate_it->get<0>();
         const auto &halo_agglomerate = agglomerate_it->get<1>();
 
+        std::cout << "Start agglomerate" << std::endl;
+        for (const auto el : interior_agglomerate)
+        {
+          std::cout << "Interior cell: " << el << std::endl;
+        }
+        for (const auto el : halo_agglomerate)
+        {
+          std::cout << "Halo cell: " << el << std::endl;
+        }
+
         dealii::Triangulation<dim> interior_agglomerate_triangulation;
         std::map<typename dealii::Triangulation<dim>::active_cell_iterator,
                  typename dealii::DoFHandler<dim>::active_cell_iterator>
@@ -158,6 +178,11 @@ DealIIHierarchyHelpers<dim, VectorType>::build_restrictor(
         amge.build_agglomerate_triangulation(halo_agglomerate,
                                              halo_agglomerate_triangulation,
                                              halo_patch_to_global_map);
+        for (const auto &pair : halo_patch_to_global_map)
+        {
+          std::cout << pair.first->center() << "->" << pair.second->center()
+                    << std::endl;
+        }
         if (interior_patch_to_global_map.empty())
         {
           ASSERT(halo_patch_to_global_map.empty(),
@@ -174,6 +199,10 @@ DealIIHierarchyHelpers<dim, VectorType>::build_restrictor(
         dealii::SparsityPattern interior_agglomerate_sparsity_pattern;
         dealii::SparseMatrix<ScalarType> interior_agglomerate_system_matrix;
         // Call user function to build the system matrix
+        std::cout << "Calling evaluate on agglomerate: "
+                  << agglomerate_it - combined_agglomerate_range.begin()
+                  << std::endl;
+
         dealii_mesh_evaluator->evaluate_agglomerate(
             interior_agglomerate_dof_handler, interior_agglomerate_constraints,
             interior_agglomerate_sparsity_pattern,
@@ -195,14 +224,24 @@ DealIIHierarchyHelpers<dim, VectorType>::build_restrictor(
             amge.compute_dof_index_map(interior_patch_to_global_map,
                                        interior_agglomerate_dof_handler);
         unsigned int const n_interior_elem = interior_dof_indices_map.size();
+        std::cout << "Interior dofs" << std::endl;
+        for (const auto el : interior_dof_indices_map)
+          std::cout << el << " ";
+        std::cout << std::endl;
 
         std::vector<dealii::types::global_dof_index> halo_dof_indices_map =
             amge.compute_dof_index_map(halo_patch_to_global_map,
                                        halo_agglomerate_dof_handler);
         unsigned int const n_halo_elem = halo_dof_indices_map.size();
+        std::cout << "Halo dofs" << std::endl;
+        for (const auto el : halo_dof_indices_map)
+          std::cout << el << " ";
+        std::cout << std::endl;
 
         unsigned int const i =
             agglomerate_it - combined_agglomerate_range.begin();
+        std::cout << "n_local_eigenvectors: " << n_local_eigenvectors
+                  << std::endl;
         for (unsigned int j = 0; j < n_local_eigenvectors; ++j)
         {
           unsigned int local_row = i * n_local_eigenvectors + j;
@@ -211,9 +250,9 @@ DealIIHierarchyHelpers<dim, VectorType>::build_restrictor(
                   .nth_index_in_set(local_row);
           /*	      if (is_halo_agglomerate)
                           row += interior_agglomerates[0].size();*/
-          std::cout << "Row: " << row << std::endl;
+          std::cout << "Row: " << global_row << std::endl;
           //	      AssertDimension((delta_eigenvector_matrix->end(row)-delta_eigenvector_matrix->begin(row)),
-          //n_elem);
+          // n_elem);
           // Get the vector used for the matrix-vector multiplication
           dealii::Vector<ScalarType> interior_delta_eig(n_interior_elem);
           dealii::Vector<ScalarType> halo_delta_eig(n_halo_elem);
@@ -242,6 +281,11 @@ DealIIHierarchyHelpers<dim, VectorType>::build_restrictor(
                                                    interior_delta_eig);
           dealii::Vector<ScalarType> halo_correction(n_halo_elem);
           halo_agglomerate_system_matrix.vmult(halo_correction, halo_delta_eig);
+          {
+            halo_agglomerate_system_matrix.print(std::cout);
+            halo_correction.print(std::cout);
+            halo_delta_eig.print(std::cout);
+          }
 
           // We would like to fill the delta correction matrix but we can't
           // because we don't know the sparsity pattern. So we accumulate
@@ -257,6 +301,10 @@ DealIIHierarchyHelpers<dim, VectorType>::build_restrictor(
           {
             local_copy_data.delta_correction_local_acc[std::make_pair(
                 global_row, halo_dof_indices_map[k])] += halo_correction[k];
+            if (global_row == 0 && halo_dof_indices_map[k] == 15)
+            {
+              std::cout << "element (0,15) is " << halo_correction[k];
+            }
           }
         }
       };
@@ -282,6 +330,14 @@ DealIIHierarchyHelpers<dim, VectorType>::build_restrictor(
     }
     delta_correction_matrix.compress(dealii::VectorOperation::insert);
 
+    std::ofstream delta_correction_out(
+        "delta_correction_out" +
+        dealii::Utilities::int_to_string(
+            dealii::Utilities::MPI::n_mpi_processes(comm)) +
+        dealii::Utilities::int_to_string(
+            dealii::Utilities::MPI::this_mpi_process(comm)));
+    delta_correction_matrix.print(delta_correction_out);
+
     // Add the eigenvector matrix and the delta correction matrix to create ap
     Epetra_CrsMatrix *ap = nullptr;
     // We want to use functions that have been deprecated in deal.II but they
@@ -303,6 +359,20 @@ DealIIHierarchyHelpers<dim, VectorType>::build_restrictor(
       }
     }
     eigenvector_matrix->compress(dealii::VectorOperation::insert);
+    if (delta_correction_matrix.in_local_range(5))
+    {
+      std::cout << "element (5,8) is " << eigenvector_matrix->el(5, 8)
+                << " before adding" << std::endl;
+      std::cout << "element (5,8) is " << delta_correction_matrix.el(5, 8)
+                << " before adding" << std::endl;
+    }
+    if (delta_correction_matrix.in_local_range(7))
+    {
+      std::cout << "element (7,8) is " << eigenvector_matrix->el(7, 8)
+                << " before adding" << std::endl;
+      std::cout << "element (7,8) is " << delta_correction_matrix.el(7, 8)
+                << " before adding" << std::endl;
+    }
 
     bool const transpose = true;
     int error_code = EpetraExt::MatrixMatrix::Add(
@@ -316,6 +386,13 @@ DealIIHierarchyHelpers<dim, VectorType>::build_restrictor(
     auto dealii_ap = std::make_shared<dealii::TrilinosWrappers::SparseMatrix>();
     dealii_ap->reinit(*ap);
     delete ap;
+
+    if (dealii_ap->in_local_range(7))
+      std::cout << "element (7,4) is " << dealii_ap->el(7, 4) << " after adding"
+                << std::endl;
+    if (eigenvector_matrix->in_local_range(16))
+      std::cout << "element (16,4) is " << dealii_ap->el(16, 4)
+                << " after adding" << std::endl;
 
     _ap_operator.reset(new DealIITrilinosMatrixOperator<VectorType>(dealii_ap));
   }

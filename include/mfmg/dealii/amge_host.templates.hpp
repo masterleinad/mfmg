@@ -225,6 +225,9 @@ AMGe_host<dim, MeshEvaluator, VectorType>::compute_local_eigenvectors(
       agglomerate_dof_handler, agglomerate_constraints,
       agglomerate_sparsity_pattern, agglomerate_system_matrix);
 
+  std::cout << "Agglomerate system matrix: " << std::endl;
+  agglomerate_system_matrix.print(std::cout);
+
   // Get the diagonal elements
   unsigned int const size = agglomerate_system_matrix.m();
   std::vector<ScalarType> diag_elements(size);
@@ -292,10 +295,13 @@ AMGe_host<dim, MeshEvaluator, VectorType>::compute_local_eigenvectors(
     dealii::LAPACKFullMatrix<double> full_matrix;
     full_matrix.copy_from(agglomerate_system_matrix);
 
+    std::cout << "LAPACK matrix: " << std::endl;
+    full_matrix.print_formatted(std::cout);
+
     double const lower_bound = -0.5;
     double const upper_bound = 100.;
     double const tol = 1e-12;
-    dealii::Vector<double> lapack_eigenvalues(size);
+    dealii::Vector<double> lapack_eigenvalues; //(size);
     dealii::FullMatrix<double> lapack_eigenvectors;
     full_matrix.compute_eigenvalues_symmetric(
         lower_bound, upper_bound, tol, lapack_eigenvalues, lapack_eigenvectors);
@@ -303,10 +309,20 @@ AMGe_host<dim, MeshEvaluator, VectorType>::compute_local_eigenvectors(
     // Copy the eigenvalues and the eigenvectors in the right format
     for (unsigned int i = 0; i < n_eigenvectors; ++i)
       eigenvalues[i] = lapack_eigenvalues[i];
+    for (unsigned int i = 0; i < eigenvalues.size(); ++i)
+    {
+      std::cout << "Eigenvalues " << i << ": " << eigenvalues[i] << std::endl;
+    }
 
     for (unsigned int i = 0; i < n_eigenvectors; ++i)
       for (unsigned int j = 0; j < n_dofs_agglomerate; ++j)
         eigenvectors[i][j] = lapack_eigenvectors[j][i];
+
+    for (unsigned int i = 0; i < eigenvectors.size(); ++i)
+    {
+      std::cout << "Eigenvector " << i << ": ";
+      eigenvectors[i].print(std::cout);
+    }
   }
   else
   {
@@ -404,6 +420,12 @@ void AMGe_host<dim, MeshEvaluator, VectorType>::setup_restrictor(
                                        dof_indices_maps, n_local_eigenvectors);
       },
       ScratchData(), copy_data);
+
+  for (unsigned int i = 0; i < eigenvectors.size(); ++i)
+  {
+    std::cout << "Eigenvector " << i << ": ";
+    eigenvectors[i].print(std::cout);
+  }
 
   AMGe<dim, VectorType>::compute_restriction_sparse_matrix(
       eigenvectors, diag_elements, dof_indices_maps, n_local_eigenvectors,

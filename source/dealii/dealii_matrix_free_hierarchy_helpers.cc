@@ -102,9 +102,9 @@ DealIIMatrixFreeHierarchyHelpers<dim, VectorType>::build_restrictor(
         amge.build_boundary_agglomerates();
     if (interior_agglomerates[0].empty())
     {
-             std::shared_ptr<Operator<VectorType>> op(
-      new DealIITrilinosMatrixOperator<VectorType>(restrictor_matrix));
-  return op;
+      std::shared_ptr<Operator<VectorType>> op(
+          new DealIITrilinosMatrixOperator<VectorType>(restrictor_matrix));
+      return op;
     }
 
     std::unordered_map<std::pair<unsigned int, unsigned int>, double,
