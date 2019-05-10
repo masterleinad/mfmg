@@ -42,6 +42,9 @@ std::vector<double> SimpleOperator<VectorType>::get_evals() const
 template <typename VectorType>
 void SimpleOperator<VectorType>::vmult(VectorType &y, VectorType const &x) const
 {
+  assert(x.size() == _dim);
+  assert(y.size() == _dim);
+
   for (size_t i = 0; i < _dim; ++i)
     y[i] = diag_value_(i) * x[i];
 }
