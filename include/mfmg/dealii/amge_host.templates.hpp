@@ -108,7 +108,7 @@ public:
 
     for (int i = 0; i < n_vectors; i++)
       op.vmult(*y[i], *x[i]);
-  };
+  }
 };
 
 } // namespace Anasazi
