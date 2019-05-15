@@ -211,7 +211,10 @@ int main(int argc, char *argv[])
   auto const params = std::make_shared<boost::property_tree::ptree>();
   boost::property_tree::info_parser::read_info(filename, *params);
 
-  int const fe_degree = params->get<unsigned int>("laplace.fe_degree", 1);
+  params->put("laplace.n_refinements", 9-dim);
+  int const fe_degree = params->get<unsigned int>("laplace.fe_degree", 4);
+  params->put("fast_ap", true);
+  params->put("eigensolver.type", "lanczos");
 
   std::cout << "input file: " << filename << ", dimension: " << dim
             << ", matrix-free: " << matrix_free << ", fe_degree: " << fe_degree
