@@ -248,13 +248,28 @@ public:
       // mode.
       x = 0.;
     }
+    return;
 
     if (level_index == num_levels - 1)
     {
       timer_enter_subsection(_timer, "Apply: coarsest level");
       // Coarsest level
       auto coarse_solver = level_fine.get_solver();
-      coarse_solver->apply(b, x);
+
+      {
+        VectorType tmp  = x;
+        VectorType tmp1 = b;
+        tmp1 = b;
+        coarse_solver->apply(tmp, x);
+        const auto val1 = b*tmp;
+        coarse_solver->apply(tmp, tmp1);
+        const auto val2 = x*tmp;
+        std::cout << std::abs(val1-val2) << std::endl;
+        std::cout << x.l2_norm()-b.l2_norm() << std::endl;
+        assert(std::abs(val1-val2) < 1.e-6);
+      }
+
+      //coarse_solver->apply(b, x);
       timer_leave_subsection(_timer);
     }
     else
@@ -265,9 +280,9 @@ public:
       auto restrictor = level_coarse.get_restrictor();
 
       // apply pre-smoother
-      auto smoother = level_fine.get_smoother();
-      for (unsigned int i = 0; i < _n_smoothing_steps; ++i)
-        smoother->apply(b, x);
+      //auto smoother = level_fine.get_smoother();
+      //for (unsigned int i = 0; i < _n_smoothing_steps; ++i)
+      //  smoother->apply(b, x);
 
       // compute residual
       // NOTE: we compute negative residual -r = Ax-b, so that we can avoid
@@ -282,6 +297,20 @@ public:
 
       // compute coarse grid correction
       auto x_coarse = level_coarse.build_vector();
+
+ {
+        VectorType tmp  = *x_coarse;
+        VectorType tmp1 = *b_coarse;
+        tmp1 = *b_coarse;
+        apply(*x_coarse, tmp, level_index+1);
+        const auto val1 = *b_coarse*tmp;
+        apply(tmp1, tmp, level_index+1);
+        const auto val2 = *x_coarse*tmp;
+        std::cout << std::abs(val1-val2) << std::endl;
+        std::cout << x_coarse->l2_norm()-b_coarse->l2_norm() << std::endl;
+        assert(std::abs(val1-val2) < 1.e-6);
+      }
+
       apply(*b_coarse, *x_coarse, level_index + 1);
 
       // update solution
@@ -290,11 +319,11 @@ public:
 
       // NOTE: as we used negative residual, we subtract instead of adding
       // here
-      x.add(-1., *x_correction);
+      //x.add(-1., *x_correction);
 
       // apply post-smoother
-      for (unsigned int i = 0; i < _n_smoothing_steps; ++i)
-        smoother->apply(b, x);
+      //for (unsigned int i = 0; i < _n_smoothing_steps; ++i)
+      //  smoother->apply(b, x);
       timer_leave_subsection(_timer);
     }
   }

@@ -6,9 +6,13 @@
 
 #include "test_hierarchy_helpers.hpp"
 
+#include <deal.II/lac/solver_richardson.h>
+#include <deal.II/lac/solver_gmres.h>
+
 template <int dim, int fe_degree>
 void matrix_free_two_grids(std::shared_ptr<boost::property_tree::ptree> params)
 {
+  const bool test_preconditioner = params->get("is preconditioner", true);
 
   using DVector = dealii::LinearAlgebra::distributed::Vector<double>;
 
@@ -43,10 +47,27 @@ void matrix_free_two_grids(std::shared_ptr<boost::property_tree::ptree> params)
     // Make the solution satisfy the Dirichlet conditions because these should
     // be treated outside the preconditioner
     if (mf_laplace._constraints.is_constrained(index))
+    {
       solution[index] = 0.;
+      rhs[index] = 0.;
+    }
     else
-      solution[index] = distribution(generator);
+      {
+        solution[index] = distribution(generator);
+        rhs[index] = distribution(generator);
+      }
   }
+
+{
+  DVector residual(rhs);
+  mf_laplace._laplace_operator.vmult(residual, solution);
+  const auto val1 = rhs*residual;
+  mf_laplace._laplace_operator.vmult(residual, rhs);
+  const auto val2 = solution*residual;
+  std::cout << std::abs(val1-val2) << std::endl;
+  std::cout << rhs.l2_norm()-solution.l2_norm() << std::endl;
+  assert(std::abs(val1-val2) < 1.e-6);
+}
 
   auto evaluator =
       std::make_shared<TestMFMeshEvaluator<dim, fe_degree, double>>(
@@ -54,31 +75,59 @@ void matrix_free_two_grids(std::shared_ptr<boost::property_tree::ptree> params)
           mf_laplace._laplace_operator, material_property);
   mfmg::Hierarchy<DVector> hierarchy(comm, evaluator, params, timer);
 
-  // We want to do 20 V-cycle iterations. The rhs of is zero.
-  // Use D(istributed)Vector because deal has its own Vector class
+{
   DVector residual(rhs);
-  unsigned int const n_cycles = 20;
-  std::vector<double> res(n_cycles + 1);
+  hierarchy.vmult(residual, solution);
+  const auto val1 = rhs*residual;
+  hierarchy.vmult(residual, rhs);
+  const auto val2 = solution*residual;
+  std::cout << val1 << " " << val2 << std::endl;
+  std::cout << std::abs(val1-val2) << std::endl;
+  std::cout << rhs.l2_norm() << " " << solution.l2_norm() << std::endl;
+  std::cout << rhs.l2_norm()-solution.l2_norm() << std::endl;
+  assert(std::abs(val1-val2) < 1.e-6);
+}
 
-  mf_laplace._laplace_operator.vmult(residual, solution);
-  residual.sadd(-1., 1., rhs);
-  auto const residual0_norm = residual.l2_norm();
-
-  std::cout << std::scientific;
-  res[0] = 1.0;
-  for (unsigned int i = 0; i < n_cycles; ++i)
+  if (test_preconditioner)
   {
-    hierarchy.vmult(solution, rhs);
+    abort();
+    // We want to do 20 V-cycle iterations. The rhs of is zero.
+    // Use D(istributed)Vector because deal has its own Vector class
+    DVector residual(rhs);
+    unsigned int const n_cycles = 20;
+    std::vector<double> res(n_cycles + 1);
 
     mf_laplace._laplace_operator.vmult(residual, solution);
     residual.sadd(-1., 1., rhs);
-    double rel_residual = residual.l2_norm() / residual0_norm;
-    res[i + 1] = rel_residual;
-  }
+    auto const residual0_norm = residual.l2_norm();
 
-  double const conv_rate = res[n_cycles] / res[n_cycles - 1];
-  pcout << "Convergence rate: " << std::fixed << std::setprecision(2)
-        << conv_rate << std::endl;
+    std::cout << std::scientific;
+    res[0] = 1.0;
+    for (unsigned int i = 0; i < n_cycles; ++i)
+    {
+      hierarchy.vmult(solution, rhs);
+
+      mf_laplace._laplace_operator.vmult(residual, solution);
+      residual.sadd(-1., 1., rhs);
+      double rel_residual = residual.l2_norm() / residual0_norm;
+      res[i + 1] = rel_residual;
+    }
+
+    double const conv_rate = res[n_cycles] / res[n_cycles - 1];
+    pcout << "Convergence rate: " << std::fixed << std::setprecision(2)
+          << conv_rate << std::endl;
+  }
+  else
+  {
+    dealii::SolverControl solver_control(solution.size(), 1.e-6, true, true);
+    dealii::SolverCG<DVector> solver(solver_control);
+    solver.solve(mf_laplace._laplace_operator, solution, rhs,
+                    //dealii::PreconditionIdentity()
+                           hierarchy
+    );
+    pcout << "Converging after " << solver_control.last_step()
+          << " iterations.\n";
+  }
 }
 
 template <int dim>
@@ -103,7 +152,7 @@ void matrix_based_two_grids(std::shared_ptr<boost::property_tree::ptree> params)
   Source<dim> source;
 
   auto laplace_ptree = params->get_child("laplace");
-  auto fe_degree = laplace_ptree.get<unsigned>("fe_degree", 1);
+  auto fe_degree = laplace_ptree.get<unsigned>("fe_degree", 4);
   Laplace<dim, DVector> laplace(comm, fe_degree);
   laplace.setup_system(laplace_ptree);
   laplace.assemble_system(source, *material_property);
@@ -200,10 +249,11 @@ int main(int argc, char *argv[])
   auto const params = std::make_shared<boost::property_tree::ptree>();
   boost::property_tree::info_parser::read_info(filename, *params);
 
-  params->put("laplace.n_refinements", 9-dim);
+  params->put("laplace.n_refinements", 1/*9 - dim*/);
   int const fe_degree = params->get<unsigned int>("laplace.fe_degree", 4);
   params->put("fast_ap", true);
-  params->put("eigensolver.type", "lanczos");
+  params->put("eigensolver.type", "anasazi");
+  params->put("is preconditioner", false);
 
   std::cout << "input file: " << filename << ", dimension: " << dim
             << ", matrix-free: " << matrix_free << ", fe_degree: " << fe_degree
