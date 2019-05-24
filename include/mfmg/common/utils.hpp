@@ -144,6 +144,13 @@ void check_restriction_matrix(
   for (auto index : locally_owned_dofs)
     ASSERT(std::abs(weight_matrix.diag_element(index) - 1.0) < 1e-14,
            "Sum of local weight matrices is not the identity");
+#else
+  (void)comm;
+  (void)eigenvectors;
+  (void)dof_indices_maps;
+  (void)locally_relevant_global_diag;
+  (void)diag_elements;
+  (void)n_local_eigenvectors;
 #endif
 }
 } // namespace mfmg
