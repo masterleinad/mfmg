@@ -12,13 +12,14 @@
 #include <mfmg/common/exceptions.hpp>
 
 #include <deal.II/base/timer.h>
+#include <deal.II/lac/solver_gmres.h>
+#include <deal.II/lac/solver_richardson.h>
 
 #include <boost/program_options.hpp>
 
 #include "test_hierarchy_helpers.hpp"
 
-#include <deal.II/lac/solver_richardson.h>
-#include <deal.II/lac/solver_gmres.h>
+auto start = std::chrono::steady_clock::now();
 
 template <int dim, int fe_degree>
 void matrix_free_two_grids(std::shared_ptr<boost::property_tree::ptree> params)
@@ -42,6 +43,12 @@ void matrix_free_two_grids(std::shared_ptr<boost::property_tree::ptree> params)
           params->get<std::string>("material_property.type"));
   Source<dim> source;
 
+  {
+    auto end = std::chrono::steady_clock::now();
+    std::chrono::duration<double> diff = end - start;
+    std::cout << "Time before mf_setup: " << diff.count() << " s\n";
+  }
+
   auto const &laplace_ptree = params->get_child("laplace");
   LaplaceMatrixFree<dim, fe_degree, double> mf_laplace(comm);
   mf_laplace.setup_system(laplace_ptree, *material_property);
@@ -63,43 +70,57 @@ void matrix_free_two_grids(std::shared_ptr<boost::property_tree::ptree> params)
       rhs[index] = 0.;
     }
     else
-      {
-        solution[index] = distribution(generator);
-        rhs[index] = distribution(generator);
-      }
+    {
+      solution[index] = distribution(generator);
+      rhs[index] = distribution(generator);
+    }
   }
 
-{
-  DVector residual(rhs);
-  mf_laplace._laplace_operator.vmult(residual, solution);
-  const auto val1 = rhs*residual;
-  mf_laplace._laplace_operator.vmult(residual, rhs);
-  const auto val2 = solution*residual;
-  std::cout << std::abs(val1-val2) << std::endl;
-  std::cout << rhs.l2_norm()-solution.l2_norm() << std::endl;
-  assert(std::abs(val1-val2) < 1.e-6);
-}
+  if (0)
+  {
+    DVector residual(rhs);
+    mf_laplace._laplace_operator.vmult(residual, solution);
+    const auto val1 = rhs * residual;
+    mf_laplace._laplace_operator.vmult(residual, rhs);
+    const auto val2 = solution * residual;
+    std::cout << std::abs(val1 - val2) << std::endl;
+    std::cout << rhs.l2_norm() - solution.l2_norm() << std::endl;
+    assert(std::abs(val1 - val2) < 1.e-6 * val1);
+  }
+
+  {
+    auto end = std::chrono::steady_clock::now();
+    std::chrono::duration<double> diff = end - start;
+    std::cout << "Time before evaluator: " << diff.count() << " s\n";
+  }
 
   auto evaluator =
       std::make_shared<TestMFMeshEvaluator<dim, fe_degree, double>>(
           mf_laplace._dof_handler, mf_laplace._constraints,
           mf_laplace._laplace_operator, material_property);
+  {
+    auto end = std::chrono::steady_clock::now();
+    std::chrono::duration<double> diff = end - start;
+    std::cout << "Time before hierarchy: " << diff.count() << " s\n";
+  }
+
   mfmg::Hierarchy<DVector> hierarchy(comm, evaluator, params, timer);
 
-{
-  DVector residual(rhs);
-  hierarchy.vmult(residual, solution);
-  const auto val1 = rhs*residual;
-  hierarchy.vmult(residual, rhs);
-  const auto val2 = solution*residual;
-  std::cout << val1 << " " << val2 << std::endl;
-  std::cout << std::abs(val1-val2) << std::endl;
-  std::cout << rhs.l2_norm() << " " << solution.l2_norm() << std::endl;
-  std::cout << rhs.l2_norm()-solution.l2_norm() << std::endl;
-  assert(std::abs(val1-val2) < 1.e-6);
-}
+  if (0)
+  {
+    DVector residual(rhs);
+    hierarchy.vmult(residual, solution);
+    const auto val1 = rhs * residual;
+    hierarchy.vmult(residual, rhs);
+    const auto val2 = solution * residual;
+    std::cout << val1 << " " << val2 << std::endl;
+    std::cout << std::abs(val1 - val2) << std::endl;
+    std::cout << rhs.l2_norm() << " " << solution.l2_norm() << std::endl;
+    std::cout << rhs.l2_norm() - solution.l2_norm() << std::endl;
+    assert(std::abs(val1 - val2) < 1.e-6 * val1);
+  }
 
-  if (test_preconditioner)
+  if (!test_preconditioner)
   {
     abort();
     // We want to do 20 V-cycle iterations. The rhs of is zero.
@@ -132,10 +153,16 @@ void matrix_free_two_grids(std::shared_ptr<boost::property_tree::ptree> params)
   {
     dealii::SolverControl solver_control(solution.size(), 1.e-6, true, true);
     dealii::SolverCG<DVector> solver(solver_control);
+
+    {
+      auto end = std::chrono::steady_clock::now();
+      std::chrono::duration<double> diff = end - start;
+      std::cout << "Time before solve: " << diff.count() << " s\n";
+    }
+
     solver.solve(mf_laplace._laplace_operator, solution, rhs,
-                    //dealii::PreconditionIdentity()
-                           hierarchy
-    );
+                 //                 dealii::PreconditionIdentity()
+                 hierarchy);
     pcout << "Converging after " << solver_control.last_step()
           << " iterations.\n";
   }
@@ -260,165 +287,172 @@ int main(int argc, char *argv[])
   auto const params = std::make_shared<boost::property_tree::ptree>();
   boost::property_tree::info_parser::read_info(filename, *params);
 
-  params->put("laplace.n_refinements", 1/*9 - dim*/);
-  int const fe_degree = params->get<unsigned int>("laplace.fe_degree", 4);
-  params->put("fast_ap", true);
-  params->put("eigensolver.type", "anasazi");
-  params->put("is preconditioner", false);
-
-  std::cout << "input file: " << filename << ", dimension: " << dim
-            << ", matrix-free: " << matrix_free << ", fe_degree: " << fe_degree
-            << std::endl;
-
-  if (matrix_free)
+  for (unsigned int i = 7; i < 8; ++i)
   {
-    if (dim == 2)
+    params->put("laplace.n_refinements", i);
+    int const fe_degree = params->get<unsigned int>("laplace.fe_degree", 4);
+    params->put("fast_ap", true);
+    params->put("eigensolver.type", "anasazi");
+    params->put("is preconditioner", true);
+
+    std::cout << "input file: " << filename << ", dimension: " << dim
+              << ", matrix-free: " << matrix_free
+              << ", fe_degree: " << fe_degree << std::endl;
+
+    auto end = std::chrono::steady_clock::now();
+    std::chrono::duration<double> diff = end - start;
+    std::cout << "Time before function call: " << diff.count() << " s\n";
+
+    if (matrix_free)
     {
-      switch (fe_degree)
+      if (dim == 2)
       {
-      case 1:
-      {
-        matrix_free_two_grids<2, 1>(params);
+        switch (fe_degree)
+        {
+        case 1:
+        {
+          matrix_free_two_grids<2, 1>(params);
 
-        break;
-      }
-      case 2:
-      {
-        matrix_free_two_grids<2, 2>(params);
+          break;
+        }
+        case 2:
+        {
+          matrix_free_two_grids<2, 2>(params);
 
-        break;
-      }
-      case 3:
-      {
-        matrix_free_two_grids<2, 3>(params);
+          break;
+        }
+        case 3:
+        {
+          matrix_free_two_grids<2, 3>(params);
 
-        break;
-      }
-      case 4:
-      {
-        matrix_free_two_grids<2, 4>(params);
+          break;
+        }
+        case 4:
+        {
+          matrix_free_two_grids<2, 4>(params);
 
-        break;
-      }
-      case 5:
-      {
-        matrix_free_two_grids<2, 5>(params);
+          break;
+        }
+        case 5:
+        {
+          matrix_free_two_grids<2, 5>(params);
 
-        break;
-      }
-      case 6:
-      {
-        matrix_free_two_grids<2, 6>(params);
+          break;
+        }
+        case 6:
+        {
+          matrix_free_two_grids<2, 6>(params);
 
-        break;
-      }
-      case 7:
-      {
-        matrix_free_two_grids<2, 7>(params);
+          break;
+        }
+        case 7:
+        {
+          matrix_free_two_grids<2, 7>(params);
 
-        break;
-      }
-      case 8:
-      {
-        matrix_free_two_grids<2, 8>(params);
+          break;
+        }
+        case 8:
+        {
+          matrix_free_two_grids<2, 8>(params);
 
-        break;
-      }
-      case 9:
-      {
-        matrix_free_two_grids<2, 9>(params);
+          break;
+        }
+        case 9:
+        {
+          matrix_free_two_grids<2, 9>(params);
 
-        break;
-      }
-      case 10:
-      {
-        matrix_free_two_grids<2, 10>(params);
+          break;
+        }
+        case 10:
+        {
+          matrix_free_two_grids<2, 10>(params);
 
-        break;
+          break;
+        }
+        default:
+        {
+          mfmg::ASSERT(false, "The fe_degree should be between 1 and 10");
+        }
+        }
       }
-      default:
+      else
       {
-        mfmg::ASSERT(false, "The fe_degree should be between 1 and 10");
-      }
+        switch (fe_degree)
+        {
+        case 1:
+        {
+          matrix_free_two_grids<3, 1>(params);
+
+          break;
+        }
+        case 2:
+        {
+          matrix_free_two_grids<3, 2>(params);
+
+          break;
+        }
+        case 3:
+        {
+          matrix_free_two_grids<3, 3>(params);
+
+          break;
+        }
+        case 4:
+        {
+          matrix_free_two_grids<3, 4>(params);
+
+          break;
+        }
+        case 5:
+        {
+          matrix_free_two_grids<3, 5>(params);
+
+          break;
+        }
+        case 6:
+        {
+          matrix_free_two_grids<3, 6>(params);
+
+          break;
+        }
+        case 7:
+        {
+          matrix_free_two_grids<3, 7>(params);
+
+          break;
+        }
+        case 8:
+        {
+          matrix_free_two_grids<3, 8>(params);
+
+          break;
+        }
+        case 9:
+        {
+          matrix_free_two_grids<3, 9>(params);
+
+          break;
+        }
+        case 10:
+        {
+          matrix_free_two_grids<3, 10>(params);
+
+          break;
+        }
+        default:
+        {
+          mfmg::ASSERT(false, "The fe_degree should be between 1 and 10");
+        }
+        }
       }
     }
     else
     {
-      switch (fe_degree)
-      {
-      case 1:
-      {
-        matrix_free_two_grids<3, 1>(params);
-
-        break;
-      }
-      case 2:
-      {
-        matrix_free_two_grids<3, 2>(params);
-
-        break;
-      }
-      case 3:
-      {
-        matrix_free_two_grids<3, 3>(params);
-
-        break;
-      }
-      case 4:
-      {
-        matrix_free_two_grids<3, 4>(params);
-
-        break;
-      }
-      case 5:
-      {
-        matrix_free_two_grids<3, 5>(params);
-
-        break;
-      }
-      case 6:
-      {
-        matrix_free_two_grids<3, 6>(params);
-
-        break;
-      }
-      case 7:
-      {
-        matrix_free_two_grids<3, 7>(params);
-
-        break;
-      }
-      case 8:
-      {
-        matrix_free_two_grids<3, 8>(params);
-
-        break;
-      }
-      case 9:
-      {
-        matrix_free_two_grids<3, 9>(params);
-
-        break;
-      }
-      case 10:
-      {
-        matrix_free_two_grids<3, 10>(params);
-
-        break;
-      }
-      default:
-      {
-        mfmg::ASSERT(false, "The fe_degree should be between 1 and 10");
-      }
-      }
+      if (dim == 2)
+        matrix_based_two_grids<2>(params);
+      else
+        matrix_based_two_grids<3>(params);
     }
-  }
-  else
-  {
-    if (dim == 2)
-      matrix_based_two_grids<2>(params);
-    else
-      matrix_based_two_grids<3>(params);
   }
 
   MPI_Finalize();
