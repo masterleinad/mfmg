@@ -36,6 +36,8 @@
 #include "main.cc"
 #include "test_hierarchy_helpers.hpp"
 
+auto start = std::chrono::steady_clock::now();
+
 namespace bdata = boost::unit_test::data;
 namespace tt = boost::test_tools;
 

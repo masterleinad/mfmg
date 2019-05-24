@@ -27,6 +27,8 @@
 
 #include <unordered_map>
 
+extern std::chrono::time_point<std::chrono::steady_clock> start;
+
 namespace mfmg
 {
 // copy/paste from DealIIMatrixFreeHierarchyHelpers::get_global_operator()
@@ -74,6 +76,13 @@ DealIIMatrixFreeHierarchyHelpers<dim, VectorType>::build_restrictor(
   bool fast_ap = params->get("fast_ap", false);
   if (fast_ap)
   {
+
+    {
+      auto end = std::chrono::steady_clock::now();
+      std::chrono::duration<double> diff = end - start;
+      std::cout << "Time before amge: " << diff.count() << " s\n";
+    }
+
     AMGe_host<dim, DealIIMatrixFreeMeshEvaluator<dim>, VectorType> amge(
         comm, dealii_mesh_evaluator->get_dof_handler(), eigensolver_params);
     std::vector<double> eigenvalues;
@@ -83,15 +92,35 @@ DealIIMatrixFreeHierarchyHelpers<dim, VectorType>::build_restrictor(
     std::unique_ptr<dealii::TrilinosWrappers::SparseMatrix> eigenvector_matrix;
     std::unique_ptr<dealii::TrilinosWrappers::SparseMatrix>
         delta_eigenvector_matrix;
+
+    {
+      auto end = std::chrono::steady_clock::now();
+      std::chrono::duration<double> diff = end - start;
+      std::cout << "Time before setup_restrictor: " << diff.count() << " s\n";
+    }
+
     amge.setup_restrictor(agglomerate_params, n_eigenvectors, tolerance,
                           *dealii_mesh_evaluator, locally_relevant_global_diag,
                           restrictor_matrix, eigenvector_matrix,
                           delta_eigenvector_matrix, eigenvalues);
 
+    {
+      auto end = std::chrono::steady_clock::now();
+      std::chrono::duration<double> diff = end - start;
+      std::cout << "Time before delta_correction: " << diff.count() << " s\n";
+    }
+
     dealii::TrilinosWrappers::SparseMatrix delta_correction_matrix(
         eigenvector_matrix->locally_owned_range_indices(),
         eigenvector_matrix->locally_owned_domain_indices(),
         eigenvector_matrix->get_mpi_communicator());
+
+    {
+      auto end = std::chrono::steady_clock::now();
+      std::chrono::duration<double> diff = end - start;
+      std::cout << "Time before building agglomerates: " << diff.count()
+                << " s\n";
+    }
 
     // Need to apply delta_eigenvector_matrix
     std::vector<std::vector<unsigned int>> interior_agglomerates;
@@ -102,6 +131,12 @@ DealIIMatrixFreeHierarchyHelpers<dim, VectorType>::build_restrictor(
                        boost::hash<std::pair<unsigned int, unsigned int>>>
         delta_correction_acc;
     bool is_halo_agglomerate = false;
+
+    {
+      auto end = std::chrono::steady_clock::now();
+      std::chrono::duration<double> diff = end - start;
+      std::cout << "Time before using agglomerates: " << diff.count() << " s\n";
+    }
 
     // In case there are no patches we own, we still need to construct the
     // restriction operators. We set the number of eigenvalues to zero instead
@@ -216,6 +251,13 @@ DealIIMatrixFreeHierarchyHelpers<dim, VectorType>::build_restrictor(
                               scratch_data, copy_data);
 
       is_halo_agglomerate = true;
+    }
+
+    {
+      auto end = std::chrono::steady_clock::now();
+      std::chrono::duration<double> diff = end - start;
+      std::cout << "Time before filling delta_correction: " << diff.count()
+                << " s\n";
     }
 
     // Fill delta_correction_matrix
