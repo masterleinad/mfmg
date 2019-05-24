@@ -268,15 +268,11 @@ DealIIMatrixFreeHierarchyHelpers<dim, VectorType>::build_restrictor(
     }
     delta_correction_matrix.compress(dealii::VectorOperation::insert);
 
-    // Add the eigenvector matrix and the delta correction matrix to create ap
-    Epetra_CrsMatrix *ap = nullptr;
-    // We want to use functions that have been deprecated in deal.II but they
-    // won't be removed in the foreseeable future
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-    Epetra_Map range_map = eigenvector_matrix->domain_partitioner();
-    Epetra_Map domain_map = eigenvector_matrix->range_partitioner();
-#pragma GCC diagnostic pop
+    {
+      auto end = std::chrono::steady_clock::now();
+      std::chrono::duration<double> diff = end - start;
+      std::cout << "Time after compressing: " << diff.count() << " s\n";
+    }
 
     auto const range_start = eigenvector_matrix->local_range().first;
     auto const range_end = eigenvector_matrix->local_range().second;
@@ -286,22 +282,56 @@ DealIIMatrixFreeHierarchyHelpers<dim, VectorType>::build_restrictor(
       for (auto column_iterator = eigenvector_matrix->begin(row);
            column_iterator != end_iterator; ++column_iterator)
       {
-        column_iterator->value() *= eigenvalues.at(row - range_start);
+        column_iterator->value() *= eigenvalues[row - range_start];
       }
     }
+    {
+      auto end = std::chrono::steady_clock::now();
+      std::chrono::duration<double> diff = end - start;
+      std::cout << "Time after rescaling: " << diff.count() << " s\n";
+    }
+
     eigenvector_matrix->compress(dealii::VectorOperation::insert);
 
+    {
+      auto end = std::chrono::steady_clock::now();
+      std::chrono::duration<double> diff = end - start;
+      std::cout << "Time after compressing again: " << diff.count() << " s\n";
+    }
+
+    // Add the eigenvector matrix and the delta correction matrix to create ap
+    Epetra_CrsMatrix *ap = nullptr;
+    // We want to use functions that have been deprecated in deal.II but they
+    // won't be removed in the foreseeable future
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+    Epetra_Map range_map = eigenvector_matrix->domain_partitioner();
+    Epetra_Map domain_map = eigenvector_matrix->range_partitioner();
+#pragma GCC diagnostic pop
     bool const transpose = true;
     int error_code = EpetraExt::MatrixMatrix::Add(
         eigenvector_matrix->trilinos_matrix(), transpose, 1.,
         delta_correction_matrix.trilinos_matrix(), transpose, 1., ap);
     ap->FillComplete(domain_map, range_map);
+
+    {
+      auto end = std::chrono::steady_clock::now();
+      std::chrono::duration<double> diff = end - start;
+      std::cout << "Time after adding " << diff.count() << " s\n";
+    }
+
     ASSERT(error_code == 0, "Problem when adding matrices");
 
     // Copy the Epetra_CrsMatrix to a dealii::TrilinosWrappers::SparseMatrix
     auto dealii_ap = std::make_shared<dealii::TrilinosWrappers::SparseMatrix>();
     dealii_ap->reinit(*ap);
     delete ap;
+
+    {
+      auto end = std::chrono::steady_clock::now();
+      std::chrono::duration<double> diff = end - start;
+      std::cout << "Time after copying " << diff.count() << " s\n";
+    }
 
     _ap_operator.reset(new DealIITrilinosMatrixOperator<VectorType>(dealii_ap));
   }
