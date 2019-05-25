@@ -160,7 +160,7 @@ void matrix_free_two_grids(std::shared_ptr<boost::property_tree::ptree> params)
       std::cout << "Time before solve: " << diff.count() << " s\n";
     }
 
-    solver.solve(mf_laplace._laplace_operator, solution, rhs,
+   solver.solve(mf_laplace._laplace_operator, solution, rhs,
                  //                 dealii::PreconditionIdentity()
                  hierarchy);
     pcout << "Converging after " << solver_control.last_step()

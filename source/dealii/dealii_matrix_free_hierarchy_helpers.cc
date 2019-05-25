@@ -277,9 +277,29 @@ DealIIMatrixFreeHierarchyHelpers<dim, VectorType>::build_restrictor(
       std::cout << "Time after compressing: " << diff.count() << " s\n";
     }
 
-    auto const range_start = eigenvector_matrix->local_range().first;
+	 auto const range_start = eigenvector_matrix->local_range().first;
     auto const range_end = eigenvector_matrix->local_range().second;
-    for (unsigned int row = range_start; row < range_end; ++row)
+
+    dealii::IndexSet locally_owned_elements(eigenvector_matrix->m());
+    locally_owned_elements.add_range(range_start, range_end);
+    dealii::TrilinosWrappers::MPI::Vector vector_eigenvalues(locally_owned_elements, MPI_COMM_WORLD);
+    std::vector<unsigned int> local_indices(eigenvalues.size());
+    std::iota(local_indices.begin(), local_indices.end(), range_start);
+    vector_eigenvalues.set(local_indices, eigenvalues);
+    vector_eigenvalues.compress(dealii::VectorOperation::insert);
+
+    Epetra_MultiVector dummy_multi_vector = vector_eigenvalues.trilinos_vector();
+    //const Epetra_Vector *intermediate = inter1(0);
+    auto &mat = const_cast<Epetra_CrsMatrix&>(eigenvector_matrix->trilinos_matrix());
+    mat.LeftScale(*dummy_multi_vector(0));
+
+     {
+      auto end = std::chrono::steady_clock::now();
+      std::chrono::duration<double> diff = end - start;
+      std::cout << "Time after copying eigenvalues: " << diff.count() << " s\n";
+    }
+
+/*    for (unsigned int row = range_start; row < range_end; ++row)
     {
       auto const end_iterator = eigenvector_matrix->end(row);
       for (auto column_iterator = eigenvector_matrix->begin(row);
@@ -287,7 +307,7 @@ DealIIMatrixFreeHierarchyHelpers<dim, VectorType>::build_restrictor(
       {
         column_iterator->value() *= eigenvalues[row - range_start];
       }
-    }
+    }*/
     {
       auto end = std::chrono::steady_clock::now();
       std::chrono::duration<double> diff = end - start;
