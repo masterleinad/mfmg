@@ -288,10 +288,9 @@ DealIIMatrixFreeHierarchyHelpers<dim, VectorType>::build_restrictor(
     vector_eigenvalues.set(local_indices, eigenvalues);
     vector_eigenvalues.compress(dealii::VectorOperation::insert);
 
-    Epetra_MultiVector dummy_multi_vector = vector_eigenvalues.trilinos_vector();
-    //const Epetra_Vector *intermediate = inter1(0);
-    auto &mat = const_cast<Epetra_CrsMatrix&>(eigenvector_matrix->trilinos_matrix());
-    mat.LeftScale(*dummy_multi_vector(0));
+    Epetra_MultiVector &dummy_multi_vector = vector_eigenvalues.trilinos_vector();
+    auto &dummy_matrix = const_cast<Epetra_CrsMatrix&>(eigenvector_matrix->trilinos_matrix());
+    dummy_matrix.LeftScale(*dummy_multi_vector(0));
 
      {
       auto end = std::chrono::steady_clock::now();
@@ -299,15 +298,6 @@ DealIIMatrixFreeHierarchyHelpers<dim, VectorType>::build_restrictor(
       std::cout << "Time after copying eigenvalues: " << diff.count() << " s\n";
     }
 
-/*    for (unsigned int row = range_start; row < range_end; ++row)
-    {
-      auto const end_iterator = eigenvector_matrix->end(row);
-      for (auto column_iterator = eigenvector_matrix->begin(row);
-           column_iterator != end_iterator; ++column_iterator)
-      {
-        column_iterator->value() *= eigenvalues[row - range_start];
-      }
-    }*/
     {
       auto end = std::chrono::steady_clock::now();
       std::chrono::duration<double> diff = end - start;
