@@ -29,6 +29,8 @@
 
 #include <EpetraExt_MatrixMatrix.h>
 
+extern std::chrono::time_point<std::chrono::steady_clock> start;
+
 namespace mfmg
 {
 
@@ -62,10 +64,10 @@ struct MatrixFreeAgglomerateOperator
   MatrixFreeAgglomerateOperator(MeshEvaluator const &mesh_evaluator,
                                 DoFHandler &dof_handler,
                                 dealii::AffineConstraints<double> &constraints)
-      : _mesh_evaluator(mesh_evaluator), _dof_handler(dof_handler),
+      : _mesh_evaluator(mesh_evaluator.clone()), _dof_handler(dof_handler),
         _constraints(constraints)
   {
-    _mesh_evaluator.matrix_free_initialize_agglomerate(dof_handler);
+    _mesh_evaluator->matrix_free_initialize_agglomerate(dof_handler);
   }
 
   /**
@@ -74,7 +76,7 @@ struct MatrixFreeAgglomerateOperator
   void vmult(dealii::Vector<double> &dst,
              const dealii::Vector<double> &src) const
   {
-    _mesh_evaluator.matrix_free_evaluate_agglomerate(src, dst);
+    _mesh_evaluator->matrix_free_evaluate_agglomerate(src, dst);
   }
 
   /**
@@ -85,7 +87,7 @@ struct MatrixFreeAgglomerateOperator
    */
   std::vector<double> get_diag_elements() const
   {
-    return _mesh_evaluator.matrix_free_get_agglomerate_diagonal(_constraints);
+    return _mesh_evaluator->matrix_free_get_agglomerate_diagonal(_constraints);
   }
 
   /**
@@ -102,7 +104,7 @@ private:
   /**
    * The actual operator wrapped.
    */
-  MeshEvaluator const &_mesh_evaluator;
+  std::unique_ptr<MeshEvaluator> const _mesh_evaluator;
 
   /**
    * The dimension for the underlying mesh.
@@ -450,6 +452,12 @@ void AMGe_host<dim, MeshEvaluator, VectorType>::setup_restrictor(
         typename VectorType::value_type> const &locally_relevant_global_diag,
     dealii::TrilinosWrappers::SparseMatrix &restriction_sparse_matrix)
 {
+ {
+      auto end = std::chrono::steady_clock::now();
+      std::chrono::duration<double> diff = end - start;
+      std::cout << "Start delta_correction: " << diff.count() << " s\n";
+    }
+
   // Flag the cells to build agglomerates.
   unsigned int const n_agglomerates =
       this->build_agglomerates(agglomerate_ptree);
@@ -462,7 +470,14 @@ void AMGe_host<dim, MeshEvaluator, VectorType>::setup_restrictor(
   std::vector<std::vector<dealii::types::global_dof_index>> dof_indices_maps;
   std::vector<unsigned int> n_local_eigenvectors;
   CopyData copy_data;
-  dealii::WorkStream::run(
+
+ {
+      auto end = std::chrono::steady_clock::now();
+      std::chrono::duration<double> diff = end - start;
+      std::cout << "Before WorkStream: " << diff.count() << " s\n";
+    }
+
+/*  dealii::WorkStream::run(
       agglomerate_ids.begin(), agglomerate_ids.end(),
       [&](std::vector<unsigned int>::iterator const &agg_id,
           ScratchData &scratch_data, CopyData &local_copy_data) {
@@ -473,7 +488,29 @@ void AMGe_host<dim, MeshEvaluator, VectorType>::setup_restrictor(
         this->copy_local_to_global(local_copy_data, eigenvectors, diag_elements,
                                    dof_indices_maps, n_local_eigenvectors);
       },
-      ScratchData(), copy_data);
+      ScratchData(), copy_data);*/
+
+   {
+	   ScratchData scratch_data;
+         for (auto i = agglomerate_ids.begin(); i!=agglomerate_ids.end(); ++i)
+           {
+                [&](std::vector<unsigned int>::iterator const &agg_id,
+          ScratchData &scratch_data, CopyData &local_copy_data) {
+        this->local_worker(n_eigenvectors, tolerance, evaluator, agg_id,
+                           scratch_data, local_copy_data);
+      }(i, scratch_data, copy_data);
+               [&](CopyData const &local_copy_data) {
+        this->copy_local_to_global(local_copy_data, eigenvectors, diag_elements,
+                                   dof_indices_maps, n_local_eigenvectors);
+      } (copy_data);
+           }
+       }
+
+   {
+      auto end = std::chrono::steady_clock::now();
+      std::chrono::duration<double> diff = end - start;
+      std::cout << "After WorkStream: " << diff.count() << " s\n";
+    }
 
   AMGe<dim, VectorType>::compute_restriction_sparse_matrix(
       eigenvectors, diag_elements, dof_indices_maps, n_local_eigenvectors,
@@ -518,7 +555,7 @@ void AMGe_host<dim, MeshEvaluator, VectorType>::setup_restrictor(
   std::vector<std::vector<dealii::types::global_dof_index>> dof_indices_maps;
   std::vector<unsigned int> n_local_eigenvectors;
   CopyData copy_data;
-  dealii::WorkStream::run(
+/*  dealii::WorkStream::run(
       agglomerate_ids.begin(), agglomerate_ids.end(),
       [&](std::vector<unsigned int>::iterator const &agg_id,
           ScratchData &scratch_data, CopyData &local_copy_data) {
@@ -530,7 +567,23 @@ void AMGe_host<dim, MeshEvaluator, VectorType>::setup_restrictor(
                                        eigenvectors, diag_elements,
                                        dof_indices_maps, n_local_eigenvectors);
       },
-      ScratchData(), copy_data);
+      ScratchData(), copy_data);*/
+
+   {
+           ScratchData scratch_data;
+         for (auto i = agglomerate_ids.begin(); i!=agglomerate_ids.end(); ++i)
+           {
+                [&](std::vector<unsigned int>::iterator const &agg_id,
+          ScratchData &scratch_data, CopyData &local_copy_data) {
+        this->local_worker(n_eigenvectors, tolerance, evaluator, agg_id,
+                           scratch_data, local_copy_data);
+      }(i, scratch_data, copy_data);
+               [&](CopyData const &local_copy_data) {
+        this->copy_local_to_global(local_copy_data, eigenvectors, diag_elements,
+                                   dof_indices_maps, n_local_eigenvectors);
+      } (copy_data);
+           }
+       }
 
   AMGe<dim, VectorType>::compute_restriction_sparse_matrix(
       eigenvectors, diag_elements, dof_indices_maps, n_local_eigenvectors,

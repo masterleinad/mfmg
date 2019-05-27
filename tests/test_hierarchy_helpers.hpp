@@ -209,6 +209,11 @@ public:
     system_matrix.copy_from(_matrix);
   }
 
+/*   virtual std::unique_ptr<MeshEvaluator> clone() const override
+  {
+     return new MeshEvaluator(*this);
+  }*/
+
   virtual void evaluate_agglomerate(
       dealii::DoFHandler<dim> &dof_handler,
       dealii::AffineConstraints<double> &constraints,
@@ -293,6 +298,20 @@ public:
         _material_property(material_property), _fe(fe_degree),
         _laplace_operator(laplace_operator)
   {
+  }
+
+  TestMFMeshEvaluator(TestMFMeshEvaluator<dim, fe_degree, ScalarType> const& _other_evaluator):
+	  mfmg::DealIIMatrixFreeMeshEvaluator<dim>(*this),
+     _material_property ( _other_evaluator._material_property),
+    _fe ( _other_evaluator._fe),
+    _laplace_operator ( _other_evaluator._laplace_operator)
+    {
+  }
+
+  virtual std::unique_ptr<mfmg::DealIIMatrixFreeMeshEvaluator<dim>> clone() const override
+  {
+     TestMFMeshEvaluator* new_evaluator = new TestMFMeshEvaluator(*this);
+     return std::make_unique<TestMFMeshEvaluator>(*this);
   }
 
   virtual void

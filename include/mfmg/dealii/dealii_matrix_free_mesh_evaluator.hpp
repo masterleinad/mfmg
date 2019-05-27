@@ -51,6 +51,12 @@ public:
   DealIIMatrixFreeMeshEvaluator(dealii::DoFHandler<dim> &dof_handler,
                                 dealii::AffineConstraints<double> &constraints);
 
+  virtual std::unique_ptr<DealIIMatrixFreeMeshEvaluator> clone() const
+  {
+    ASSERT_THROW_NOT_IMPLEMENTED();	  
+    return std::make_unique<DealIIMatrixFreeMeshEvaluator>(*this);
+  }
+
   /**
    * Return the class name as std::string.
    */

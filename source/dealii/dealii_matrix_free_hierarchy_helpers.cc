@@ -18,6 +18,7 @@
 #include <mfmg/dealii/dealii_matrix_free_smoother.hpp>
 #include <mfmg/dealii/dealii_solver.hpp>
 #include <mfmg/dealii/dealii_trilinos_matrix_operator.hpp>
+#include <mfmg/dealii/amge_host.templates.hpp>
 
 #include <deal.II/base/work_stream.h>
 #include <deal.II/dofs/dof_accessor.h>
@@ -228,10 +229,12 @@ DealIIMatrixFreeHierarchyHelpers<dim, VectorType>::build_restrictor(
 
               // Perform the matrix-vector multiplication
               dealii::Vector<ScalarType> correction(n_elem);
-              dealii_mesh_evaluator->matrix_free_initialize_agglomerate(
-                  agglomerate_dof_handler);
-              dealii_mesh_evaluator->matrix_free_evaluate_agglomerate(
-                  delta_eig, correction);
+
+  dealii::AffineConstraints<double> agglomerate_constraints;
+  using AgglomerateOperator = MatrixFreeAgglomerateOperator<DealIIMatrixFreeMeshEvaluator<dim>>;
+  AgglomerateOperator agglomerate_operator(*dealii_mesh_evaluator, agglomerate_dof_handler,
+                                           agglomerate_constraints);
+              agglomerate_operator.vmult(correction, delta_eig);
 
               // Store the values the delta correction matrix is to be filled with.
               local_copy_data.rows[j] = global_row;
@@ -254,9 +257,17 @@ DealIIMatrixFreeHierarchyHelpers<dim, VectorType>::build_restrictor(
         }
       };
 
-      dealii::WorkStream::run(agglomerates_vector.begin(),
+/*      dealii::WorkStream::run(agglomerates_vector.begin(),
                               agglomerates_vector.end(), worker, copier,
-                              scratch_data, copy_data);
+                              scratch_data, copy_data);*/
+
+       {
+         for (auto i = agglomerates_vector.begin(); i!=agglomerates_vector.end(); ++i)
+           {
+               worker (i, scratch_data, copy_data);
+               copier (copy_data);
+           }
+       }
 
       is_halo_agglomerate = true;
     }

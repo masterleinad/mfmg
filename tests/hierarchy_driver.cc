@@ -15,6 +15,8 @@
 #include <deal.II/lac/solver_gmres.h>
 #include <deal.II/lac/solver_richardson.h>
 
+#include <Teuchos_TimeMonitor.hpp>
+
 #include <boost/program_options.hpp>
 
 #include "test_hierarchy_helpers.hpp"
@@ -252,6 +254,8 @@ int main(int argc, char *argv[])
 
   MPI_Init(&argc, &argv);
 
+  Teuchos::TimeMonitor::setStackedTimer(Teuchos::null);
+
   boost_po::options_description cmd("Available options");
   cmd.add_options()("help,h", "produce help message");
   cmd.add_options()("filename,f", boost_po::value<std::string>()->multitoken(),
@@ -290,7 +294,7 @@ int main(int argc, char *argv[])
   for (unsigned int i = 7; i < 8; ++i)
   {
     params->put("laplace.n_refinements", i);
-    int const fe_degree = params->get<unsigned int>("laplace.fe_degree", 4);
+    int const fe_degree = params->get<unsigned int>("laplace.fe_degree", 1);
     params->put("fast_ap", true);
     params->put("eigensolver.type", "anasazi");
     params->put("is preconditioner", true);
