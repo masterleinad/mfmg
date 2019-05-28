@@ -64,10 +64,10 @@ struct MatrixFreeAgglomerateOperator
   MatrixFreeAgglomerateOperator(MeshEvaluator const &mesh_evaluator,
                                 DoFHandler &dof_handler,
                                 dealii::AffineConstraints<double> &constraints)
-      : _mesh_evaluator(mesh_evaluator), _dof_handler(dof_handler),
+      : _mesh_evaluator(mesh_evaluator.clone()), _dof_handler(dof_handler),
         _constraints(constraints)
   {
-    _mesh_evaluator.matrix_free_initialize_agglomerate(dof_handler);
+    _mesh_evaluator->matrix_free_initialize_agglomerate(dof_handler);
   }
 
   /**
@@ -76,7 +76,7 @@ struct MatrixFreeAgglomerateOperator
   void vmult(dealii::Vector<double> &dst,
              const dealii::Vector<double> &src) const
   {
-    _mesh_evaluator.matrix_free_evaluate_agglomerate(src, dst);
+    _mesh_evaluator->matrix_free_evaluate_agglomerate(src, dst);
   }
 
   /**
@@ -87,7 +87,7 @@ struct MatrixFreeAgglomerateOperator
    */
   std::vector<double> get_diag_elements() const
   {
-    return _mesh_evaluator.matrix_free_get_agglomerate_diagonal(_constraints);
+    return _mesh_evaluator->matrix_free_get_agglomerate_diagonal(_constraints);
   }
 
   /**
@@ -104,7 +104,7 @@ private:
   /**
    * The actual operator wrapped.
    */
-  MeshEvaluator const &_mesh_evaluator;
+  std::unique_ptr<MeshEvaluator const> const _mesh_evaluator;
 
   /**
    * The dimension for the underlying mesh.

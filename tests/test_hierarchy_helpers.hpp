@@ -295,6 +295,20 @@ public:
   {
   }
 
+  TestMFMeshEvaluator(TestMFMeshEvaluator<dim, fe_degree, ScalarType> const& _other_evaluator):
+         mfmg::DealIIMatrixFreeMeshEvaluator<dim>(*this),
+     _material_property ( _other_evaluator._material_property),
+    _fe ( _other_evaluator._fe),
+    _laplace_operator ( _other_evaluator._laplace_operator)
+    {
+  }
+
+  virtual std::unique_ptr<mfmg::DealIIMatrixFreeMeshEvaluator<dim>> clone() const override
+  {
+   TestMFMeshEvaluator* new_evaluator = new TestMFMeshEvaluator(*this);
+     return std::make_unique<TestMFMeshEvaluator>(*this);
+  }
+
   virtual void
   matrix_free_evaluate_agglomerate(dealii::Vector<double> const &src,
                                    dealii::Vector<double> &dst) const override
