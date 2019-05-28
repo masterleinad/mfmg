@@ -261,9 +261,20 @@ DealIIMatrixFreeHierarchyHelpers<dim, VectorType>::build_restrictor(
         }
       };
 
-      dealii::WorkStream::run(agglomerates_vector.begin(),
-                              agglomerates_vector.end(), worker, copier,
-                              scratch_data, copy_data);
+      /*
+        dealii::WorkStream::run(agglomerates_vector.begin(),
+                                    agglomerates_vector.end(), worker, copier,
+                                    scratch_data, copy_data);
+                                    */
+
+      {
+        for (auto i = agglomerates_vector.begin();
+             i != agglomerates_vector.end(); ++i)
+        {
+          worker(i, scratch_data, copy_data);
+          copier(copy_data);
+        }
+      }
 
       is_halo_agglomerate = true;
     }
