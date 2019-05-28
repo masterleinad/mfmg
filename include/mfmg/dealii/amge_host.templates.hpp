@@ -29,6 +29,8 @@
 
 #include <EpetraExt_MatrixMatrix.h>
 
+extern std::chrono::time_point<std::chrono::steady_clock> start;
+
 namespace mfmg
 {
 
@@ -450,6 +452,12 @@ void AMGe_host<dim, MeshEvaluator, VectorType>::setup_restrictor(
         typename VectorType::value_type> const &locally_relevant_global_diag,
     dealii::TrilinosWrappers::SparseMatrix &restriction_sparse_matrix)
 {
+  {
+    auto end = std::chrono::steady_clock::now();
+    std::chrono::duration<double> diff = end - start;
+    std::cout << "Start delta_correction: " << diff.count() << " s\n";
+  }
+
   // Flag the cells to build agglomerates.
   unsigned int const n_agglomerates =
       this->build_agglomerates(agglomerate_ptree);
