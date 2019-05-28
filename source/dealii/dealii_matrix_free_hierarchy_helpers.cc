@@ -12,6 +12,7 @@
 #include <mfmg/common/instantiation.hpp>
 #include <mfmg/common/operator.hpp>
 #include <mfmg/dealii/amge_host.hpp>
+#include <mfmg/dealii/amge_host.templates.hpp>
 #include <mfmg/dealii/dealii_matrix_free_hierarchy_helpers.hpp>
 #include <mfmg/dealii/dealii_matrix_free_mesh_evaluator.hpp>
 #include <mfmg/dealii/dealii_matrix_free_operator.hpp>
@@ -160,87 +161,93 @@ DealIIMatrixFreeHierarchyHelpers<dim, VectorType>::build_restrictor(
         std::vector<std::vector<dealii::TrilinosScalar>> values_per_row;
       } copy_data;
 
-      auto worker =
-          [&](const std::vector<std::vector<unsigned int>>::const_iterator
-                  &agglomerate_it,
-              ScratchData &, CopyData &local_copy_data) {
-            dealii::Triangulation<dim> agglomerate_triangulation;
-            std::map<typename dealii::Triangulation<dim>::active_cell_iterator,
-                     typename dealii::DoFHandler<dim>::active_cell_iterator>
-                patch_to_global_map;
-            amge.build_agglomerate_triangulation(*agglomerate_it,
-                                                 agglomerate_triangulation,
-                                                 patch_to_global_map);
-            if (patch_to_global_map.empty())
+      auto worker = [&](const std::vector<std::vector<unsigned int>>::
+                            const_iterator &agglomerate_it,
+                        ScratchData &, CopyData &local_copy_data) {
+        dealii::Triangulation<dim> agglomerate_triangulation;
+        std::map<typename dealii::Triangulation<dim>::active_cell_iterator,
+                 typename dealii::DoFHandler<dim>::active_cell_iterator>
+            patch_to_global_map;
+        amge.build_agglomerate_triangulation(
+            *agglomerate_it, agglomerate_triangulation, patch_to_global_map);
+        if (patch_to_global_map.empty())
+        {
+          return;
+        }
+
+        // Now that we have the triangulation, we can do the evaluation on
+        // the agglomerate
+        dealii::DoFHandler<dim> agglomerate_dof_handler(
+            agglomerate_triangulation);
+        agglomerate_dof_handler.distribute_dofs(
+            dealii_mesh_evaluator->get_dof_handler().get_fe());
+
+        // Put the result in the matrix
+        // Compute the map between the local and the global dof indices.
+        local_copy_data.rows.resize(n_local_eigenvectors);
+
+        local_copy_data.cols = amge.compute_dof_index_map(
+            patch_to_global_map, agglomerate_dof_handler);
+        auto const &dof_indices_map = local_copy_data.cols;
+        unsigned int const n_elem = dof_indices_map.size();
+
+        local_copy_data.values_per_row.resize(n_local_eigenvectors);
+        std::fill(local_copy_data.values_per_row.begin(),
+                  local_copy_data.values_per_row.end(),
+                  std::vector<dealii::TrilinosScalar>(n_elem));
+
+        unsigned int const i = agglomerate_it - agglomerates_vector.begin();
+
+        for (unsigned int j = 0; j < n_local_eigenvectors; ++j)
+        {
+          unsigned int const local_row = i * n_local_eigenvectors + j;
+          unsigned int const global_row =
+              eigenvector_matrix->locally_owned_range_indices()
+                  .nth_index_in_set(local_row);
+          // Get the vector used for the matrix-vector multiplication
+          dealii::Vector<ScalarType> delta_eig(n_elem);
+          if (is_halo_agglomerate)
+          {
+            for (unsigned int k = 0; k < n_elem; ++k)
             {
-              return;
+              delta_eig[k] =
+                  delta_eigenvector_matrix->el(global_row, dof_indices_map[k]) +
+                  eigenvector_matrix->el(global_row, dof_indices_map[k]);
             }
-
-            // Now that we have the triangulation, we can do the evaluation on
-            // the agglomerate
-            dealii::DoFHandler<dim> agglomerate_dof_handler(
-                agglomerate_triangulation);
-            agglomerate_dof_handler.distribute_dofs(
-                dealii_mesh_evaluator->get_dof_handler().get_fe());
-
-            // Put the result in the matrix
-            // Compute the map between the local and the global dof indices.
-            local_copy_data.rows.resize(n_local_eigenvectors);
-
-            local_copy_data.cols = amge.compute_dof_index_map(
-                patch_to_global_map, agglomerate_dof_handler);
-            auto const &dof_indices_map = local_copy_data.cols;
-            unsigned int const n_elem = dof_indices_map.size();
-
-            local_copy_data.values_per_row.resize(n_local_eigenvectors);
-            std::fill(local_copy_data.values_per_row.begin(),
-                      local_copy_data.values_per_row.end(),
-                      std::vector<dealii::TrilinosScalar>(n_elem));
-
-            unsigned int const i = agglomerate_it - agglomerates_vector.begin();
-
-            for (unsigned int j = 0; j < n_local_eigenvectors; ++j)
+          }
+          else
+          {
+            for (unsigned int k = 0; k < n_elem; ++k)
             {
-              unsigned int const local_row = i * n_local_eigenvectors + j;
-              unsigned int const global_row =
-                  eigenvector_matrix->locally_owned_range_indices()
-                      .nth_index_in_set(local_row);
-              // Get the vector used for the matrix-vector multiplication
-              dealii::Vector<ScalarType> delta_eig(n_elem);
-              if (is_halo_agglomerate)
-              {
-                for (unsigned int k = 0; k < n_elem; ++k)
-                {
-                  delta_eig[k] =
-                      delta_eigenvector_matrix->el(global_row,
-                                                   dof_indices_map[k]) +
-                      eigenvector_matrix->el(global_row, dof_indices_map[k]);
-                }
-              }
-              else
-              {
-                for (unsigned int k = 0; k < n_elem; ++k)
-                {
-                  delta_eig[k] = delta_eigenvector_matrix->el(
-                      global_row, dof_indices_map[k]);
-                }
-              }
-
-              // Perform the matrix-vector multiplication
-              dealii::Vector<ScalarType> correction(n_elem);
-              dealii_mesh_evaluator->matrix_free_initialize_agglomerate(
-                  agglomerate_dof_handler);
-              dealii_mesh_evaluator->matrix_free_evaluate_agglomerate(
-                  delta_eig, correction);
-
-              // Store the values the delta correction matrix is to be filled with.
-              local_copy_data.rows[j] = global_row;
-              std::transform(correction.begin(), correction.end(),
-                             local_copy_data.values_per_row[j].begin(),
-                             local_copy_data.values_per_row[j].begin(),
-                             std::plus<double>());
+              delta_eig[k] =
+                  delta_eigenvector_matrix->el(global_row, dof_indices_map[k]);
             }
-          };
+          }
+
+          // Perform the matrix-vector multiplication
+          dealii::Vector<ScalarType> correction(n_elem);
+          dealii::AffineConstraints<double> agglomerate_constraints;
+          using AgglomerateOperator =
+              MatrixFreeAgglomerateOperator<DealIIMatrixFreeMeshEvaluator<dim>>;
+          AgglomerateOperator agglomerate_operator(*dealii_mesh_evaluator,
+                                                   agglomerate_dof_handler,
+                                                   agglomerate_constraints);
+          agglomerate_operator.vmult(correction, delta_eig);
+          /*
+                        dealii_mesh_evaluator->matrix_free_initialize_agglomerate(
+                            agglomerate_dof_handler);
+                        dealii_mesh_evaluator->matrix_free_evaluate_agglomerate(
+                            delta_eig, correction);
+                            */
+
+          // Store the values the delta correction matrix is to be filled with.
+          local_copy_data.rows[j] = global_row;
+          std::transform(correction.begin(), correction.end(),
+                         local_copy_data.values_per_row[j].begin(),
+                         local_copy_data.values_per_row[j].begin(),
+                         std::plus<double>());
+        }
+      };
 
       auto copier = [&](const CopyData &local_copy_data) {
         for (unsigned int i = 0; i < local_copy_data.rows.size(); ++i)
@@ -277,22 +284,25 @@ DealIIMatrixFreeHierarchyHelpers<dim, VectorType>::build_restrictor(
       std::cout << "Time after compressing: " << diff.count() << " s\n";
     }
 
-	 auto const range_start = eigenvector_matrix->local_range().first;
+    auto const range_start = eigenvector_matrix->local_range().first;
     auto const range_end = eigenvector_matrix->local_range().second;
 
     dealii::IndexSet locally_owned_elements(eigenvector_matrix->m());
     locally_owned_elements.add_range(range_start, range_end);
-    dealii::TrilinosWrappers::MPI::Vector vector_eigenvalues(locally_owned_elements, MPI_COMM_WORLD);
+    dealii::TrilinosWrappers::MPI::Vector vector_eigenvalues(
+        locally_owned_elements, MPI_COMM_WORLD);
     std::vector<unsigned int> local_indices(eigenvalues.size());
     std::iota(local_indices.begin(), local_indices.end(), range_start);
     vector_eigenvalues.set(local_indices, eigenvalues);
     vector_eigenvalues.compress(dealii::VectorOperation::insert);
 
-    Epetra_MultiVector &dummy_multi_vector = vector_eigenvalues.trilinos_vector();
-    auto &dummy_matrix = const_cast<Epetra_CrsMatrix&>(eigenvector_matrix->trilinos_matrix());
+    Epetra_MultiVector &dummy_multi_vector =
+        vector_eigenvalues.trilinos_vector();
+    auto &dummy_matrix =
+        const_cast<Epetra_CrsMatrix &>(eigenvector_matrix->trilinos_matrix());
     dummy_matrix.LeftScale(*dummy_multi_vector(0));
 
-     {
+    {
       auto end = std::chrono::steady_clock::now();
       std::chrono::duration<double> diff = end - start;
       std::cout << "Time after copying eigenvalues: " << diff.count() << " s\n";
