@@ -558,7 +558,8 @@ void AMGe_host<dim, MeshEvaluator, VectorType>::setup_restrictor(
   std::vector<unsigned int> n_local_eigenvectors;
   CopyData copy_data;
 
-  dealii::WorkStream::run(
+  /*
+   dealii::WorkStream::run(
       agglomerate_ids.begin(), agglomerate_ids.end(),
       [&](std::vector<unsigned int>::iterator const &agg_id,
           ScratchData &scratch_data, CopyData &local_copy_data) {
@@ -571,8 +572,8 @@ void AMGe_host<dim, MeshEvaluator, VectorType>::setup_restrictor(
                                        dof_indices_maps, n_local_eigenvectors);
       },
       ScratchData(), copy_data);
+*/
 
-  if (0)
   {
     ScratchData scratch_data;
     for (auto i = agglomerate_ids.begin(); i != agglomerate_ids.end(); ++i)
@@ -583,8 +584,9 @@ void AMGe_host<dim, MeshEvaluator, VectorType>::setup_restrictor(
                            scratch_data, local_copy_data);
       }(i, scratch_data, copy_data);
       [&](CopyData const &local_copy_data) {
-        this->copy_local_to_global(local_copy_data, eigenvectors, diag_elements,
-                                   dof_indices_maps, n_local_eigenvectors);
+        this->copy_local_to_global_eig(local_copy_data, eigenvalues,
+                                       eigenvectors, diag_elements,
+                                       dof_indices_maps, n_local_eigenvectors);
       }(copy_data);
     }
   }
