@@ -51,6 +51,8 @@ public:
   DealIIMatrixFreeMeshEvaluator(dealii::DoFHandler<dim> &dof_handler,
                                 dealii::AffineConstraints<double> &constraints);
 
+  virtual ~DealIIMatrixFreeMeshEvaluator() override = default;
+
   virtual std::unique_ptr<DealIIMatrixFreeMeshEvaluator> clone() const
   {
     ASSERT_THROW_NOT_IMPLEMENTED();	  
