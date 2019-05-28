@@ -470,6 +470,14 @@ void AMGe_host<dim, MeshEvaluator, VectorType>::setup_restrictor(
   std::vector<std::vector<dealii::types::global_dof_index>> dof_indices_maps;
   std::vector<unsigned int> n_local_eigenvectors;
   CopyData copy_data;
+
+  {
+    auto end = std::chrono::steady_clock::now();
+    std::chrono::duration<double> diff = end - start;
+    std::cout << "Before WorkStream: " << diff.count() << " s\n";
+  }
+
+  /*
   dealii::WorkStream::run(
       agglomerate_ids.begin(), agglomerate_ids.end(),
       [&](std::vector<unsigned int>::iterator const &agg_id,
@@ -482,6 +490,29 @@ void AMGe_host<dim, MeshEvaluator, VectorType>::setup_restrictor(
                                    dof_indices_maps, n_local_eigenvectors);
       },
       ScratchData(), copy_data);
+  */
+
+  {
+    ScratchData scratch_data;
+    for (auto i = agglomerate_ids.begin(); i != agglomerate_ids.end(); ++i)
+    {
+      [&](std::vector<unsigned int>::iterator const &agg_id,
+          ScratchData &scratch_data, CopyData &local_copy_data) {
+        this->local_worker(n_eigenvectors, tolerance, evaluator, agg_id,
+                           scratch_data, local_copy_data);
+      }(i, scratch_data, copy_data);
+      [&](CopyData const &local_copy_data) {
+        this->copy_local_to_global(local_copy_data, eigenvectors, diag_elements,
+                                   dof_indices_maps, n_local_eigenvectors);
+      }(copy_data);
+    }
+  }
+
+  {
+    auto end = std::chrono::steady_clock::now();
+    std::chrono::duration<double> diff = end - start;
+    std::cout << "After WorkStream: " << diff.count() << " s\n";
+  }
 
   AMGe<dim, VectorType>::compute_restriction_sparse_matrix(
       eigenvectors, diag_elements, dof_indices_maps, n_local_eigenvectors,
