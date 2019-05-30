@@ -556,8 +556,7 @@ void AMGe_host<dim, MeshEvaluator, VectorType>::setup_restrictor(
   std::vector<unsigned int> n_local_eigenvectors;
   CopyData copy_data;
 
-  /*
-     dealii::WorkStream::run(
+       dealii::WorkStream::run(
       agglomerate_ids.begin(), agglomerate_ids.end(),
       [&](std::vector<unsigned int>::iterator const &agg_id,
           ScratchData &scratch_data, CopyData &local_copy_data) {
@@ -570,8 +569,8 @@ void AMGe_host<dim, MeshEvaluator, VectorType>::setup_restrictor(
                                        dof_indices_maps, n_local_eigenvectors);
       },
       ScratchData(), copy_data);
-*/
 
+       /*
   {
     ScratchData scratch_data;
     for (auto i = agglomerate_ids.begin(); i != agglomerate_ids.end(); ++i)
@@ -588,6 +587,7 @@ void AMGe_host<dim, MeshEvaluator, VectorType>::setup_restrictor(
       }(copy_data);
     }
   }
+  */
 
   AMGe<dim, VectorType>::compute_restriction_sparse_matrix(
       eigenvectors, diag_elements, dof_indices_maps, n_local_eigenvectors,
@@ -602,6 +602,7 @@ void AMGe_host<dim, MeshEvaluator, VectorType>::local_worker(
     std::vector<unsigned int>::iterator const &agg_id, ScratchData &,
     CopyData &copy_data)
 {
+	std::cout << "Start local_worker" << std::endl;
   dealii::Triangulation<dim> agglomerate_triangulation;
   std::map<typename dealii::Triangulation<dim>::active_cell_iterator,
            typename dealii::DoFHandler<dim>::active_cell_iterator>
@@ -609,12 +610,14 @@ void AMGe_host<dim, MeshEvaluator, VectorType>::local_worker(
 
   this->build_agglomerate_triangulation(*agg_id, agglomerate_triangulation,
                                         agglomerate_to_global_tria_map);
+  std::cout << "Built agglomerate triangulation" << std::endl;
 
   std::tie(copy_data.local_eigenvalues, copy_data.local_eigenvectors,
            copy_data.diag_elements, copy_data.local_dof_indices_map) =
       compute_local_eigenvectors(n_eigenvectors, tolerance,
                                  agglomerate_triangulation,
                                  agglomerate_to_global_tria_map, evaluator);
+  std::cout << "Computed eigenvectors" << std::endl;
 }
 
 template <int dim, typename MeshEvaluator, typename VectorType>

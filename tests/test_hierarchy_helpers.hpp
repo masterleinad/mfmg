@@ -41,7 +41,7 @@ template <int dim>
 class Source final : public dealii::Function<dim>
 {
 public:
-  Source() = default();
+  Source() = default;
 
   virtual ~Source() override = default;
 
@@ -321,7 +321,6 @@ public:
 
   virtual std::unique_ptr<mfmg::DealIIMatrixFreeMeshEvaluator<dim>> clone() const override
   {
-   TestMFMeshEvaluator* new_evaluator = new TestMFMeshEvaluator(*this);
      return std::make_unique<TestMFMeshEvaluator>(*this);
   }
 

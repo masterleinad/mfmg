@@ -37,7 +37,7 @@ template class mfmg::AMGe_host<
                   dealii::LinearAlgebra::distributed::Vector<double>>::        \
       compute_local_eigenvectors(                                              \
           unsigned int n_eigenvectors, double tolerance,                       \
-          dealii::parallel::distributed::Triangulation<DIM> const              \
+          /*dealii::parallel::distributed*/dealii::Triangulation<DIM> const              \
               &agglomerate_triangulation,                                      \
           std::map<                                                            \
               typename dealii::Triangulation<DIM>::active_cell_iterator,       \

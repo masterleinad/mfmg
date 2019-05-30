@@ -219,7 +219,8 @@ public:
   // The following variable should be private but there are public for
   // simplicity
   MPI_Comm _comm;
-  dealii::parallel::distributed::Triangulation<dim> _triangulation;
+  //dealii::parallel::distributed::Triangulation<dim> _triangulation;
+  dealii::Triangulation<dim> _triangulation;
   dealii::FE_Q<dim> _fe;
   dealii::DoFHandler<dim> _dof_handler;
   dealii::IndexSet _locally_owned_dofs;
@@ -233,7 +234,7 @@ public:
 template <int dim, int fe_degree, typename ScalarType>
 LaplaceMatrixFree<dim, fe_degree, ScalarType>::LaplaceMatrixFree(
     MPI_Comm const &comm)
-    : _comm(comm), _triangulation(_comm), _fe(fe_degree),
+    : _comm(comm)/*, _triangulation(_comm)*/, _fe(fe_degree),
       _dof_handler(_triangulation)
 {
 }

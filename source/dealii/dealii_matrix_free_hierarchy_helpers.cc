@@ -157,7 +157,7 @@ DealIIMatrixFreeHierarchyHelpers<dim, VectorType>::build_restrictor(
       struct CopyData
       {
         std::vector<unsigned int> rows;
-        std::vector<unsigned int> cols;
+        std::vector<dealii::types::global_dof_index> cols;
         std::vector<std::vector<dealii::TrilinosScalar>> values_per_row;
       } copy_data;
 
@@ -302,7 +302,7 @@ DealIIMatrixFreeHierarchyHelpers<dim, VectorType>::build_restrictor(
     locally_owned_elements.add_range(range_start, range_end);
     dealii::TrilinosWrappers::MPI::Vector vector_eigenvalues(
         locally_owned_elements, MPI_COMM_WORLD);
-    std::vector<unsigned int> local_indices(eigenvalues.size());
+    std::vector<dealii::types::global_dof_index> local_indices(eigenvalues.size());
     std::iota(local_indices.begin(), local_indices.end(), range_start);
     vector_eigenvalues.set(local_indices, eigenvalues);
     vector_eigenvalues.compress(dealii::VectorOperation::insert);

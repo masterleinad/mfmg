@@ -43,7 +43,7 @@ std::string DealIIMeshEvaluator<dim>::get_mesh_evaluator_type() const
 template <int dim>
 void DealIIMeshEvaluator<dim>::set_initial_guess(
     dealii::AffineConstraints<double> &constraints,
-    dealii::Vector<double> &x) const
+    dealii::Vector<double> &x)
 {
   unsigned int const n = x.size();
 

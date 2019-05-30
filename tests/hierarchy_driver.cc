@@ -250,7 +250,7 @@ int main(int argc, char *argv[])
 {
   namespace boost_po = boost::program_options;
 
-  MPI_Init(&argc, &argv);
+  dealii::Utilities::MPI::MPI_InitFinalize mpi_init(argc, argv);
 
   boost_po::options_description cmd("Available options");
   cmd.add_options()("help,h", "produce help message");
@@ -292,7 +292,7 @@ int main(int argc, char *argv[])
     params->put("laplace.n_refinements", i);
     int const fe_degree = params->get<unsigned int>("laplace.fe_degree", 4);
     params->put("fast_ap", true);
-    params->put("eigensolver.type", "anasazi");
+    params->put("eigensolver.type", "lanczos");
     params->put("is preconditioner", true);
 
     std::cout << "input file: " << filename << ", dimension: " << dim
@@ -454,8 +454,6 @@ int main(int argc, char *argv[])
         matrix_based_two_grids<3>(params);
     }
   }
-
-  MPI_Finalize();
 
   return 0;
 }
