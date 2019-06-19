@@ -48,17 +48,23 @@ void SmootherOperator<dealii::LinearAlgebra::distributed::Vector<
           dealii::LinearAlgebra::distributed::Vector<
               double, dealii::MemorySpace::CUDA> &x)
 {
+std::cout << "start smoother" << std::endl;
   // r = -(b - Ax)
   dealii::LinearAlgebra::distributed::Vector<double, dealii::MemorySpace::CUDA>
       r(b);
+std::cout << "x:" << x.l2_norm() << std::endl;
   op.apply(x, r);
+std::cout << "r:" << r.l2_norm() << std::endl;
   r.add(-1., b);
+std::cout << "r:" << r.l2_norm() << std::endl;
 
   // x = x + B^{-1} (-r)
   dealii::LinearAlgebra::distributed::Vector<double, dealii::MemorySpace::CUDA>
       tmp(x);
   smoother.vmult(tmp, r);
+std::cout << "tmp:" << tmp.l2_norm() << std::endl;
   x.add(-1., tmp);
+std::cout << "x:" << x.l2_norm() << std::endl;
 }
 
 template <typename ScalarType>
@@ -130,6 +136,9 @@ CudaMatrixFreeSmoother<dim, VectorType>::CudaMatrixFreeSmoother(
       row_ptr_dev, size, partitioner->locally_owned_range(),
       partitioner->locally_owned_range(),
       cuda_matrix_free_operator->get_cuda_handle().cusparse_handle);
+std::cout << "Smoother" <<std::endl;
+  convert_to_trilinos_matrix(_smoother).print(std::cout);
+  _smoother.print();
 }
 
 template <int dim, typename VectorType>

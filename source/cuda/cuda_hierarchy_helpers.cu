@@ -16,6 +16,7 @@
 #include <mfmg/cuda/cuda_smoother.cuh>
 #include <mfmg/cuda/cuda_solver.cuh>
 #include <mfmg/cuda/sparse_matrix_device.cuh>
+#include <mfmg/cuda/utils.cuh>
 
 namespace mfmg
 {
@@ -73,6 +74,9 @@ CudaHierarchyHelpers<dim, VectorType>::build_restrictor(
       std::make_shared<SparseMatrixDevice<typename VectorType::value_type>>(
           amge.setup_restrictor(agglomerate_params, n_eigenvectors, tolerance,
                                 *cuda_mesh_evaluator));
+  std::cout << "START" << std::endl;
+  convert_to_trilinos_matrix(*restrictor_matrix).print(std::cout);
+  std::cout << "END" << std::endl;
 
   auto restrictor =
       std::make_shared<CudaMatrixOperator<VectorType>>(restrictor_matrix);

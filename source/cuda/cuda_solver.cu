@@ -215,6 +215,8 @@ CudaSolver<VectorType>::CudaSolver(
   _solver = this->_params->get("solver.type", "lu_dense");
   std::transform(_solver.begin(), _solver.end(), _solver.begin(), tolower);
 
+  std::cerr << "XXX: solver type is: " << _solver << '\n';
+
 #if MFMG_WITH_AMGX
   // If the solver is amgx, we need the name of the input file
   if (_solver == "amgx")
