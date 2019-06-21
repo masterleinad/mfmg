@@ -136,9 +136,9 @@ CudaMatrixFreeSmoother<dim, VectorType>::CudaMatrixFreeSmoother(
       row_ptr_dev, size, partitioner->locally_owned_range(),
       partitioner->locally_owned_range(),
       cuda_matrix_free_operator->get_cuda_handle().cusparse_handle);
-std::cout << "Smoother" <<std::endl;
-  convert_to_trilinos_matrix(_smoother).print(std::cout);
-  _smoother.print();
+//std::cout << "Smoother" <<std::endl;
+//  convert_to_trilinos_matrix(_smoother).print(std::cout);
+//  _smoother.print();
 }
 
 template <int dim, typename VectorType>

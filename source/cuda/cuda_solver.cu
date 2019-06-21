@@ -35,7 +35,7 @@ struct DirectSolver
              AMGX_vector_handle const &amgx_solution_handle,
              AMGX_solver_handle const &amgx_solver_handle,
              SparseMatrixDevice<typename VectorType::value_type> const &matrix,
-             VectorType &b, VectorType &x);
+             VectorType const &b, VectorType &x);
 #endif
 };
 
@@ -100,7 +100,7 @@ void DirectSolver<VectorType>::amgx_solve(
     AMGX_vector_handle const &amgx_solution_handle,
     AMGX_solver_handle const &amgx_solver_handle,
     SparseMatrixDevice<typename VectorType::value_type> const &matrix,
-    VectorType &b, VectorType &x)
+    VectorType const &b, VectorType &x)
 {
   ASSERT_THROW_NOT_IMPLEMENTED();
 }
@@ -114,17 +114,24 @@ void DirectSolver<dealii::LinearAlgebra::distributed::Vector<
                AMGX_solver_handle const &amgx_solver_handle,
                SparseMatrixDevice<double> const &matrix,
                dealii::LinearAlgebra::distributed::Vector<
-                   double, dealii::MemorySpace::CUDA> &b,
+                   double, dealii::MemorySpace::CUDA> const &b,
                dealii::LinearAlgebra::distributed::Vector<
                    double, dealii::MemorySpace::CUDA> &x)
 {
+ std::cout << "b before solve" << std::endl;
+ b.print(std::cout);
+ std::cout << "x before solve" << std::endl;
+ x.print(std::cout);
   // Copy data into a vector object
   unsigned int const n_local_rows = matrix.n_local_rows();
   std::vector<double> val_host(n_local_rows);
   mfmg::cuda_mem_copy_to_host(b.get_values(), val_host);
   std::vector<double> tmp(val_host);
   for (auto const &pos : row_map)
+{
+    std::cout << "val_host[" << pos.second << "] = tmp[" << pos.first << "] = "<<tmp[pos.first] << std::endl;
     val_host[pos.second] = tmp[pos.first];
+}
   mfmg::cuda_mem_copy_to_dev(val_host, b.get_values());
 
   int const block_dim_x = 1;
@@ -145,7 +152,10 @@ void DirectSolver<dealii::LinearAlgebra::distributed::Vector<
   mfmg::cuda_mem_copy_to_host(x.get_values(), solution_host);
   tmp = solution_host;
   for (auto const &pos : row_map)
+  {
+    std::cout << "solution_host[" << pos.first << "] = tmp[" << pos.second << "] = "<<tmp[pos.second] << std::endl;
     solution_host[pos.first] = tmp[pos.second];
+  }
 
   // Move the solution back on the device
   mfmg::cuda_mem_copy_to_dev(solution_host, x.get_values());
@@ -160,7 +170,7 @@ void DirectSolver<dealii::LinearAlgebra::distributed::Vector<
                AMGX_solver_handle const &amgx_solver_handle,
                SparseMatrixDevice<double> const &matrix,
                dealii::LinearAlgebra::distributed::Vector<
-                   double, dealii::MemorySpace::Host> &b,
+                   double, dealii::MemorySpace::Host> const &b,
                dealii::LinearAlgebra::distributed::Vector<
                    double, dealii::MemorySpace::Host> &x)
 {
@@ -230,8 +240,12 @@ CudaSolver<VectorType>::CudaSolver(
 
     // We need to cast away the const because we need to change the format
     // of _matrix to the format supported by amgx
-    auto &amgx_matrix = const_cast<SparseMatrixDevice<value_type> &>(
-        *(cuda_operator->get_matrix()));
+    auto amgx_matrix = *(cuda_operator->get_matrix());
+//const_cast<SparseMatrixDevice<value_type> &>(*(cuda_operator->get_matrix()));
+
+    std::cout << "matrix in solver constructor start" << std::endl;
+    convert_to_trilinos_matrix(amgx_matrix).print(std::cout);
+    std::cout << "matrix in solver constructor end" << std::endl;
 
     AMGX_initialize();
     AMGX_initialize_plugins();
@@ -437,6 +451,22 @@ CudaSolver<VectorType>::CudaSolver(
     int const block_dim_x = 1;
     int const block_dim_y = 1;
 
+    std::cout << "n_local_rows: " << n_local_rows << std::endl;
+    std::cout << "local_nnz: " << local_nnz << std::endl;
+    std::cout << "block_dim_x: " << block_dim_x << std::endl;
+    std::cout << "block_dim_y: " << block_dim_y << std::endl;
+    std::cout << "rows" << std::endl;
+    for (auto const row: row_ptr_host)
+      std::cout << row << std::endl;
+    std::cout << "columns" << std::endl;
+    for (auto const col: column_index_host)
+      std::cout << col << std::endl;
+    std::cout << "values" << std::endl;
+    std::vector<double> val_host(local_nnz);
+    mfmg::cuda_mem_copy_to_host(amgx_matrix.val_dev, val_host);
+    for (auto const value: val_host)
+      std::cout << value << std::endl;
+
     AMGX_matrix_upload_all(_amgx_matrix_handle, n_local_rows, local_nnz,
                            block_dim_x, block_dim_y, amgx_matrix.row_ptr_dev,
                            amgx_matrix.column_index_dev, amgx_matrix.val_dev,
@@ -503,15 +533,15 @@ void CudaSolver<VectorType>::apply(VectorType const &b, VectorType &x) const
       std::dynamic_pointer_cast<CudaMatrixOperator<VectorType> const>(
           this->_operator);
   auto matrix = cuda_operator->get_matrix();
+  std::cout << "coarse matrix" << std::endl;
+  convert_to_trilinos_matrix(*matrix).print(std::cout);
+
 #if MFMG_WITH_AMGX
   if (_solver == "amgx")
   {
-    // We need to reorder b because we had to reorder the matrix. So we need to
-    // cast the const away
-    auto &amgx_b = const_cast<VectorType &>(b);
     DirectSolver<VectorType>::amgx_solve(
         _row_map, _amgx_rhs_handle, _amgx_solution_handle, _amgx_solver_handle,
-        *matrix, amgx_b, x);
+        *matrix, b, x);
   }
   else
 #endif

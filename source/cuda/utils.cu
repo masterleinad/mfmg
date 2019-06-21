@@ -181,6 +181,21 @@ convert_to_trilinos_matrix(SparseMatrixDevice<double> const &matrix_dev)
   cuda_mem_copy_to_host(matrix_dev.column_index_dev, column_index);
   cuda_mem_copy_to_host(matrix_dev.row_ptr_dev, row_ptr);
 
+/*std::cout << "values" << std::endl;
+ for (auto const value: values)
+std::cout << value << "\n";
+std::cout << std::endl;
+
+std::cout << "columns" << std::endl;
+ for (auto const column: column_index)
+std::cout << column << "\n";
+std::cout << std::endl;
+
+std::cout << "n_rows" << std::endl;
+ for (auto const n_entries: row_ptr)
+std::cout << n_entries << "\n";
+std::cout << std::endl;*/
+
   // Create the sparse matrix on the host
   dealii::IndexSet locally_owned_rows =
       matrix_dev.locally_owned_range_indices();
@@ -207,6 +222,10 @@ std::tuple<std::unordered_map<int, int>, std::unordered_map<int, int>>
 csr_to_amgx(std::unordered_set<int> const &rows_sent,
             SparseMatrixDevice<double> &matrix_dev)
 {
+  std::cout << "matrix before start" << std::endl;
+  convert_to_trilinos_matrix(matrix_dev).print(std::cout);
+  std::cout << "matrix before end" << std::endl;
+
   unsigned int local_nnz = matrix_dev.local_nnz();
   int *row_index_coo_dev = nullptr;
   cuda_malloc(row_index_coo_dev, local_nnz);
@@ -298,6 +317,10 @@ csr_to_amgx(std::unordered_set<int> const &rows_sent,
 
   // Free allocated memory
   cuda_free(row_index_coo_dev);
+
+/*std::cout << "matrix after start" << std::endl;
+  convert_to_trilinos_matrix(matrix_dev).print(std::cout);
+  std::cout << "matrix after end" << std::endl;*/
 
   return std::make_tuple(halo_map, local_map);
 }

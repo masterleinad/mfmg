@@ -102,9 +102,9 @@ CudaMatrixFreeOperator<dim, VectorType>::multiply_transpose(
   auto b_sparse_matrix_dev = downcast_b->get_matrix();
   auto b_sparse_matrix = convert_to_trilinos_matrix(*b_sparse_matrix_dev);
 
-  std::cout << "b_sparse_matrix:" << std::endl;
+  /*std::cout << "b_sparse_matrix:" << std::endl;
   b_sparse_matrix.print(std::cout);
-std::cout << "b_spoarse end" << std::endl;
+  std::cout << "b_spoarse end" << std::endl;*/
 
   // FIXME The function below needs to perform many vmult where the operator
   // is on the device but the source and the destination vectors are on the
@@ -115,9 +115,9 @@ std::cout << "b_spoarse end" << std::endl;
       b_sparse_matrix.locally_owned_range_indices(),
       tmp->get_mpi_communicator(), b_sparse_matrix, *this);
 
-  std::cout << "c_sparse_matrix:" << std::endl;
+  /*std::cout << "c_sparse_matrix:" << std::endl;
   c_sparse_matrix->print(std::cout);
-std::cout << "_sparse end" << std::endl;
+std::cout << "_sparse end" << std::endl;*/
 
   // Convert matrix does not set cuda_handle and description
   auto c_dev = std::make_shared<SparseMatrixDevice<double>>(
@@ -136,9 +136,9 @@ std::cout << "_sparse end" << std::endl;
   std::shared_ptr<Operator<VectorType>> op(
       new CudaMatrixOperator<VectorType>(c_dev));
 
- std::cout << "c_dev_matrix:" << std::endl;
+/* std::cout << "c_dev_matrix:" << std::endl;
   convert_to_trilinos_matrix(*c_dev).print(std::cout);
-std::cout << "c_dev end" << std::endl;
+std::cout << "c_dev end" << std::endl;*/
 
   return op;
 }

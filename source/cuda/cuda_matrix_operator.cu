@@ -139,30 +139,30 @@ std::shared_ptr<Operator<VectorType>> CudaMatrixOperator<VectorType>::multiply(
 
   auto a_mat = this->get_matrix();
 
- std::cout << "START mult" << std::endl;
-  convert_to_trilinos_matrix(*a_mat).print(std::cout);
-  std::cout << "END mult" << std::endl;
+ //std::cout << "START mult" << std::endl;
+ // convert_to_trilinos_matrix(*a_mat).print(std::cout);
+ // std::cout << "END mult" << std::endl;
 
   auto b_mat = downcast_b->get_matrix();
 
- std::cout << "START mult" << std::endl;
-  convert_to_trilinos_matrix(*b_mat).print(std::cout);
-  std::cout << "END mult" << std::endl;
+ //std::cout << "START mult" << std::endl;
+ // convert_to_trilinos_matrix(*b_mat).print(std::cout);
+//  std::cout << "END mult" << std::endl;
 
 
   // Initialize c
   auto c_mat = std::make_shared<SparseMatrixDevice<double>>(*a_mat);
 
- std::cout << "START mult" << std::endl;
-  convert_to_trilinos_matrix(*c_mat).print(std::cout);
-  std::cout << "END mult" << std::endl;
+ //std::cout << "START mult" << std::endl;
+ // convert_to_trilinos_matrix(*c_mat).print(std::cout);
+ // std::cout << "END mult" << std::endl;
 
 
   a_mat->mmult(*c_mat, *b_mat);
 
- std::cout << "START mult" << std::endl;
-  convert_to_trilinos_matrix(*a_mat).print(std::cout);
-  std::cout << "END mult" << std::endl;
+ //std::cout << "START mult" << std::endl;
+ // convert_to_trilinos_matrix(*a_mat).print(std::cout);
+ // std::cout << "END mult" << std::endl;
 
 
   return std::make_shared<CudaMatrixOperator<VectorType>>(c_mat);
