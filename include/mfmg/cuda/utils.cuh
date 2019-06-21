@@ -59,7 +59,7 @@ convert_to_trilinos_matrix(SparseMatrixDevice<double> const &matrix_dev);
 
 std::tuple<std::unordered_map<int, int>, std::unordered_map<int, int>>
 csr_to_amgx(std::unordered_set<int> const &rows_sent,
-            mfmg::SparseMatrixDevice<double> &matrix_dev);
+            mfmg::SparseMatrixDevice<double> const &matrix_dev);
 
 #if __CUDACC__
 

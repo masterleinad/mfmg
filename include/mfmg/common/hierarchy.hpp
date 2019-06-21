@@ -336,7 +336,7 @@ public:
       auto coarse_solver = level_fine.get_solver();
       std::cout << "b coarse: " << b.l2_norm() << std::endl;
       coarse_solver->apply(b, x);
-      std::cout << "x: " << b.l2_norm() << std::endl;
+      std::cout << "x: " << x.l2_norm() << std::endl;
       timer_leave_subsection(_timer);
     }
     else

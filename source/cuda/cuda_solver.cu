@@ -240,7 +240,7 @@ CudaSolver<VectorType>::CudaSolver(
 
     // We need to cast away the const because we need to change the format
     // of _matrix to the format supported by amgx
-    auto amgx_matrix = *(cuda_operator->get_matrix());
+    auto const &amgx_matrix = *(cuda_operator->get_matrix());
 //const_cast<SparseMatrixDevice<value_type> &>(*(cuda_operator->get_matrix()));
 
     std::cout << "matrix in solver constructor start" << std::endl;
@@ -467,10 +467,10 @@ CudaSolver<VectorType>::CudaSolver(
     for (auto const value: val_host)
       std::cout << value << std::endl;
 
-    AMGX_matrix_upload_all(_amgx_matrix_handle, n_local_rows, local_nnz,
+    AMGX_matrix_upload_all/*_global*/(_amgx_matrix_handle/*, amgx_matrix.n()*/, n_local_rows, local_nnz,
                            block_dim_x, block_dim_y, amgx_matrix.row_ptr_dev,
                            amgx_matrix.column_index_dev, amgx_matrix.val_dev,
-                           nullptr);
+                           nullptr/*, 1,1, nullptr*/);
     AMGX_solver_setup(_amgx_solver_handle, _amgx_matrix_handle);
   }
 #endif

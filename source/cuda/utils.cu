@@ -220,7 +220,7 @@ std::cout << std::endl;*/
 
 std::tuple<std::unordered_map<int, int>, std::unordered_map<int, int>>
 csr_to_amgx(std::unordered_set<int> const &rows_sent,
-            SparseMatrixDevice<double> &matrix_dev)
+            SparseMatrixDevice<double> const &matrix_dev)
 {
   std::cout << "matrix before start" << std::endl;
   convert_to_trilinos_matrix(matrix_dev).print(std::cout);
@@ -258,17 +258,30 @@ csr_to_amgx(std::unordered_set<int> const &rows_sent,
   dealii::IndexSet col_indexset(matrix_dev.n());
   col_indexset.add_indices(col_index_host.begin(), col_index_host.end());
   col_indexset.compress();
+
+  int const rank = dealii::Utilities::MPI::this_mpi_process(MPI_COMM_WORLD);
+
+  std::cout << "halo map before" << std::endl;
+  for (auto const pair: halo_map)
+    std::cout << pair.first << "->" << pair.second << std::endl;
+
   for (auto index : col_indexset)
   {
-    int rank = dealii::Utilities::MPI::this_mpi_process(MPI_COMM_WORLD);
     if (range_indexset.is_element(index) == false)
     {
       halo_map[index] = next_free_id;
       ++next_free_id;
     }
   }
-  for (auto &col_index : col_index_host)
-    col_index = halo_map[col_index];
+
+  std::cout << "halo map after columns" << std::endl;
+  for (auto const pair: halo_map)
+    std::cout << pair.first << "->" << pair.second << std::endl;
+
+  std::vector<int> local_col_index_host;
+  local_col_index_host.reserve(local_nnz);
+  for (auto const col_index : col_index_host)
+    local_col_index_host.push_back(halo_map[col_index]);
 
   // Reorder rows and columns. We need to move to the top the rows that are
   // locally owned
@@ -289,6 +302,10 @@ csr_to_amgx(std::unordered_set<int> const &rows_sent,
       ++next_free_id;
     }
   }
+
+  std::cout << "local map before" << std::endl;
+  for (auto const pair: local_map)
+    std::cout << pair.first << "->" << pair.second << std::endl;
 
   for (auto &col_index : col_index_host)
   {
@@ -321,6 +338,10 @@ csr_to_amgx(std::unordered_set<int> const &rows_sent,
 /*std::cout << "matrix after start" << std::endl;
   convert_to_trilinos_matrix(matrix_dev).print(std::cout);
   std::cout << "matrix after end" << std::endl;*/
+
+  std::cout << "matrix after start" << std::endl;
+  convert_to_trilinos_matrix(matrix_dev).print(std::cout);
+  std::cout << "matrix after end" << std::endl;
 
   return std::make_tuple(halo_map, local_map);
 }

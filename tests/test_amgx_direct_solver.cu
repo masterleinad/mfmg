@@ -122,12 +122,12 @@ BOOST_AUTO_TEST_CASE(amgx_2_procs)
   cudaError_t cuda_error_code = cudaGetDeviceCount(&n_devices);
   mfmg::ASSERT_CUDA(cuda_error_code);
   int comm_size = dealii::Utilities::MPI::n_mpi_processes(MPI_COMM_WORLD);
-  if ((n_devices == 2) && (comm_size == 2))
+  if (comm_size == 2)
   {
     int rank = dealii::Utilities::MPI::this_mpi_process(MPI_COMM_WORLD);
     if (rank < 2)
     {
-      cuda_error_code = cudaSetDevice(rank);
+      cuda_error_code = cudaSetDevice(rank%n_devices);
 
       mfmg::CudaHandle cuda_handle;
 
