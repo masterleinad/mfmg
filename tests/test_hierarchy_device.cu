@@ -71,9 +71,10 @@ double test_mf(std::shared_ptr<boost::property_tree::ptree> params)
     if (mf_laplace._constraints.is_constrained(index))
       rw_vector[index] = 0.;
     else
-      rw_vector[index] = distribution(generator);
+      rw_vector[index] = 1.;//distribution(generator);
   }
   solution.import(rw_vector, dealii::VectorOperation::insert);
+  //mf_laplace._constraints.print(std::cout);
 
   auto evaluator =
       std::make_shared<TestMFMeshEvaluator<dim, fe_degree, value_type>>(
@@ -86,12 +87,13 @@ double test_mf(std::shared_ptr<boost::property_tree::ptree> params)
   // We want to do 20 V-cycle iterations. The rhs of is zero.
   // Use D(istributed)Vector because deal has its own Vector class
   DVector residual(rhs);
-  unsigned int const n_cycles = 20;
+  unsigned int const n_cycles = 1;
   std::vector<double> res(n_cycles + 1);
 
   laplace_operator->vmult(residual, solution);
   residual.sadd(-1., 1., rhs);
   auto const residual0_norm = residual.l2_norm();
+  pcout << residual0_norm << std::endl;
 
   std::cout << std::scientific;
   pcout << "#0: " << 1.0 << std::endl;
@@ -99,7 +101,7 @@ double test_mf(std::shared_ptr<boost::property_tree::ptree> params)
   for (unsigned int i = 0; i < n_cycles; ++i)
   {
     hierarchy.apply(rhs, solution);
-
+    pcout << solution.l2_norm() << std::endl;
     laplace_operator->vmult(residual, solution);
     residual.sadd(-1., 1., rhs);
     double rel_residual = residual.l2_norm() / residual0_norm;
@@ -189,7 +191,7 @@ double test(std::shared_ptr<boost::property_tree::ptree> params)
 
   return conv_rate;
 }
-
+/*
 BOOST_DATA_TEST_CASE(hierarchy_2d_serial,
                      bdata::make<std::string>({"matrix_based", "matrix_free"}),
                      mesh_evaluator_type)
@@ -273,15 +275,15 @@ BOOST_AUTO_TEST_CASE(hierarchy_3d)
         }
   }
 }
-
+*/
 #if MFMG_WITH_AMGX
 BOOST_DATA_TEST_CASE(amgx,
-                     bdata::make<std::string>({"matrix_based", "matrix_free"}),
+                     bdata::make<std::string>({/*"matrix_based", */"matrix_free"}),
                      mesh_evaluator_type)
 {
   // We do not do as many tests as for the two-grid because AMGx will only
   // use multiple levels if the problem is large enough.
-  unsigned int constexpr dim = 3;
+  unsigned int constexpr dim = 2;
   auto params = std::make_shared<boost::property_tree::ptree>();
   boost::property_tree::info_parser::read_info("hierarchy_input.info", *params);
   params->put("solver.type", "amgx");
@@ -289,7 +291,7 @@ BOOST_DATA_TEST_CASE(amgx,
 
   params->put("eigensolver.type", "lapack");
   params->put("agglomeration.nz", 2);
-  params->put("laplace.n_refinements", 5);
+  params->put("laplace.n_refinements", 2);
   // We only supports Jacobi smoother on the device
   params->put("smoother.type", "Jacobi");
 
