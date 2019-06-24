@@ -222,9 +222,95 @@ std::tuple<std::unordered_map<int, int>, std::unordered_map<int, int>>
 csr_to_amgx(std::unordered_set<int> const &rows_sent,
             SparseMatrixDevice<double> const &matrix_dev)
 {
-  std::cout << "matrix before start" << std::endl;
+  std::cout << "matrix before sorting start" << std::endl;
   convert_to_trilinos_matrix(matrix_dev).print(std::cout);
-  std::cout << "matrix before end" << std::endl;
+  std::cout << "matrix before sorting end" << std::endl;
+
+{
+  // Copy the values, the rows, and the columns to the host
+  unsigned int const local_nnz = matrix_dev.local_nnz();
+  unsigned int const n_local_rows = matrix_dev.n_local_rows();
+
+  std::vector<double> value_host(local_nnz);
+  cuda_mem_copy_to_host(matrix_dev.val_dev, value_host);
+  std::vector<int> col_index_host(local_nnz);
+  cuda_mem_copy_to_host(matrix_dev.column_index_dev, col_index_host);
+  std::vector<int> cumulative_n_rows_host(n_local_rows+1);
+  cuda_mem_copy_to_host(matrix_dev.row_ptr_dev, cumulative_n_rows_host);
+
+  // sort columns
+
+  std::cout << "old columns" << std::endl;
+  for (unsigned int i=0; i<col_index_host.size(); ++i)
+    std::cout << col_index_host[i] << " ";
+  std::cout << std::endl;
+
+  std::cout << "old rows" << std::endl;
+  for (unsigned int i=0; i<cumulative_n_rows_host.size(); ++i)
+    std::cout << cumulative_n_rows_host[i] << " ";
+  std::cout << std::endl;
+
+  std::cout << "old values" << std::endl;
+  for (unsigned int i=0; i<value_host.size(); ++i)
+    std::cout << value_host[i] << " ";
+  std::cout << std::endl;
+
+  unsigned int pos = 0;
+  for (auto row : matrix_dev.locally_owned_range_indices())
+  {
+    unsigned int const n_cols = cumulative_n_rows_host[pos + 1] - cumulative_n_rows_host[pos];
+    double *col_values_begin = value_host.data()+cumulative_n_rows_host[pos];
+    int *col_indices_begin = col_index_host.data()+cumulative_n_rows_host[pos];
+
+    std::cout << "columns before sorting" << std::endl;
+    for (unsigned int i=0; i<n_cols; ++i)
+      std::cout << *(col_indices_begin+i) << " ";
+    std::cout<<std::endl;
+
+    std::vector<int> permutation_indices(n_cols);
+    std::iota(permutation_indices.begin(), permutation_indices.end(), 0);
+    std::sort(permutation_indices.begin(), permutation_indices.end(),
+    [&](const int& a, const int& b) { 
+        return *(col_indices_begin+a) < *(col_indices_begin+b);
+    });
+
+    std::vector<int> copy_indices(n_cols);
+    std::vector<double> copy_values(n_cols); 
+    std::copy(col_indices_begin, col_indices_begin+n_cols, copy_indices.begin());
+    std::copy(col_values_begin, col_values_begin+n_cols, copy_values.begin());
+    for (size_t i = 0; i < n_cols; ++i)
+    { 
+      std::cout << "permutation_index: " << permutation_indices[i] << std::endl;
+      std::cout << "before " << *(col_indices_begin+i) << std::endl;
+      *(col_indices_begin+i) = copy_indices[permutation_indices[i]];
+      std::cout << "after " << *(col_indices_begin+i) << std::endl;
+      *(col_values_begin+i) = copy_values[permutation_indices[i]];
+    }
+    ++pos;
+  }
+
+  std::cout << "new columns" << std::endl;
+  for (unsigned int i=0; i<col_index_host.size(); ++i)
+    std::cout << col_index_host[i] << " ";
+  std::cout << std::endl;
+
+ std::cout << "old rows" << std::endl;
+  for (unsigned int i=0; i<cumulative_n_rows_host.size(); ++i)
+    std::cout << cumulative_n_rows_host[i] << " ";
+  std::cout << std::endl;
+
+  std::cout << "old values" << std::endl;
+  for (unsigned int i=0; i<value_host.size(); ++i)
+    std::cout << value_host[i] << " ";
+  std::cout << std::endl;
+
+  cuda_mem_copy_to_dev(value_host, matrix_dev.val_dev);
+  cuda_mem_copy_to_dev(col_index_host, matrix_dev.column_index_dev);
+}
+
+std::cout << "matrix after sorting start" << std::endl;
+  convert_to_trilinos_matrix(matrix_dev).print(std::cout);
+  std::cout << "matrix after sorting end" << std::endl;
 
   unsigned int local_nnz = matrix_dev.local_nnz();
   int *row_index_coo_dev = nullptr;
@@ -238,7 +324,7 @@ csr_to_amgx(std::unordered_set<int> const &rows_sent,
       n_local_rows, row_index_coo_dev, CUSPARSE_INDEX_BASE_ZERO);
   ASSERT_CUSPARSE(cusparse_error_code);
 
-  // Move the values, the rows, and the columns to the host
+  // Copy the values, the rows, and the columns to the host
   std::vector<double> value_host(local_nnz);
   cuda_mem_copy_to_host(matrix_dev.val_dev, value_host);
   std::vector<int> col_index_host(local_nnz);
@@ -282,6 +368,9 @@ csr_to_amgx(std::unordered_set<int> const &rows_sent,
   local_col_index_host.reserve(local_nnz);
   for (auto const col_index : col_index_host)
     local_col_index_host.push_back(halo_map[col_index]);
+  //for (auto &col_index : col_index_host)
+  //  col_index = halo_map[col_index];
+  col_index_host = local_col_index_host;
 
   // Reorder rows and columns. We need to move to the top the rows that are
   // locally owned
@@ -307,14 +396,21 @@ csr_to_amgx(std::unordered_set<int> const &rows_sent,
   for (auto const pair: local_map)
     std::cout << pair.first << "->" << pair.second << std::endl;
 
-  for (auto &col_index : col_index_host)
+  //std::vector<int> local_col_index_host;
+  local_col_index_host.reserve(local_nnz);
+  for (unsigned int i=0; i< col_index_host.size(); ++i)
   {
-    if (col_index < n_local_rows)
-      col_index = local_map[col_index];
+    if (col_index_host[i] < n_local_rows)
+      local_col_index_host[i] = local_map[col_index_host[i]];
   }
+  col_index_host = local_col_index_host;
 
-  for (auto &row_index : row_index_host)
-    row_index = local_map[row_index];
+  std::vector<int> local_row_index_host(local_nnz);
+  for (unsigned int i=0; i< row_index_host.size(); ++i)
+  {
+    local_row_index_host[i] = local_map[row_index_host[i]];
+  }
+  row_index_host = local_row_index_host;
 
   // Sort the vectors
   auto permutation = sort_permutation(row_index_host, col_index_host);

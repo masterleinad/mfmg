@@ -127,11 +127,20 @@ void DirectSolver<dealii::LinearAlgebra::distributed::Vector<
   std::vector<double> val_host(n_local_rows);
   mfmg::cuda_mem_copy_to_host(b.get_values(), val_host);
   std::vector<double> tmp(val_host);
-  for (auto const &pos : row_map)
+
+
+for (unsigned int i=0; i<n_local_rows; ++i)
+ val_host[i] = 1.;
+
+for (auto const &pos : row_map)
 {
     std::cout << "val_host[" << pos.second << "] = tmp[" << pos.first << "] = "<<tmp[pos.first] << std::endl;
-    val_host[pos.second] = tmp[pos.first];
+//    val_host[pos.second] = 1.;///tmp[pos.first];
 }
+
+for (unsigned int i=0; i<n_local_rows; ++i)
+ std::cout << val_host[i] << std::endl;
+
   mfmg::cuda_mem_copy_to_dev(val_host, b.get_values());
 
   int const block_dim_x = 1;
