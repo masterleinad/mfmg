@@ -118,13 +118,29 @@ void DirectSolver<dealii::LinearAlgebra::distributed::Vector<
                dealii::LinearAlgebra::distributed::Vector<
                    double, dealii::MemorySpace::CUDA> &x)
 {
+ std::cout << "b before solve" << std::endl;
+ b.print(std::cout);
+ std::cout << "x before solve" << std::endl;
+ x.print(std::cout);
   // Copy data into a vector object
   unsigned int const n_local_rows = matrix.n_local_rows();
   std::vector<double> val_host(n_local_rows);
   mfmg::cuda_mem_copy_to_host(b.get_values(), val_host);
   std::vector<double> tmp(val_host);
-  for (auto const &pos : row_map)
-    val_host[pos.second] = tmp[pos.first];
+
+
+for (unsigned int i=0; i<n_local_rows; ++i)
+ val_host[i] = 1.;
+
+for (auto const &pos : row_map)
+{
+    std::cout << "val_host[" << pos.second << "] = tmp[" << pos.first << "] = "<<tmp[pos.first] << std::endl;
+//    val_host[pos.second] = 1.;///tmp[pos.first];
+}
+
+for (unsigned int i=0; i<n_local_rows; ++i)
+ std::cout << val_host[i] << std::endl;
+
   mfmg::cuda_mem_copy_to_dev(val_host, b.get_values());
 
   int const block_dim_x = 1;
@@ -145,7 +161,10 @@ void DirectSolver<dealii::LinearAlgebra::distributed::Vector<
   mfmg::cuda_mem_copy_to_host(x.get_values(), solution_host);
   tmp = solution_host;
   for (auto const &pos : row_map)
+  {
+    std::cout << "solution_host[" << pos.first << "] = tmp[" << pos.second << "] = "<<tmp[pos.second] << std::endl;
     solution_host[pos.first] = tmp[pos.second];
+  }
 
   // Move the solution back on the device
   mfmg::cuda_mem_copy_to_dev(solution_host, x.get_values());
