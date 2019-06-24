@@ -334,7 +334,9 @@ public:
       timer_enter_subsection(_timer, "Apply: coarsest level");
       // Coarsest level
       auto coarse_solver = level_fine.get_solver();
+      std::cout << "b coarse: " << b.l2_norm() << std::endl;
       coarse_solver->apply(b, x);
+      std::cout << "x: " << x.l2_norm() << std::endl;
       timer_leave_subsection(_timer);
     }
     else
@@ -347,7 +349,11 @@ public:
       // apply pre-smoother
       auto smoother = level_fine.get_smoother();
       for (unsigned int i = 0; i < _n_smoothing_steps; ++i)
+      {
+        std::cout << "b fine : " << b.l2_norm() << std::endl;
         smoother->apply(b, x);
+        std::cout << "x: " << x.l2_norm() << std::endl;
+      }
 
       // compute residual
       // NOTE: we compute negative residual -r = Ax-b, so that we can avoid
@@ -355,26 +361,34 @@ public:
       auto res = level_fine.build_vector();
       a->apply(x, *res);
       res->add(-1., b);
+      std::cout << "res: " << res->l2_norm() << std::endl;
 
       // restrict residual
       auto b_coarse = level_coarse.build_vector();
       restrictor->apply(*res, *b_coarse);
+      std::cout << "b_coarse: " << b_coarse->l2_norm() << std::endl;
 
       // compute coarse grid correction
       auto x_coarse = level_coarse.build_vector();
       apply(*b_coarse, *x_coarse, level_index + 1);
+      std::cout << "x_coarse: " << x_coarse->l2_norm() << std::endl;
 
       // update solution
       auto x_correction = level_fine.build_vector();
       restrictor->apply(*x_coarse, *x_correction, OperatorMode::TRANS);
+      std::cout << "x_correction: " << x_correction->l2_norm() << std::endl;
 
       // NOTE: as we used negative residual, we subtract instead of adding
       // here
       x.add(-1., *x_correction);
+      std::cout << "x: " << x.l2_norm() << std::endl;
 
       // apply post-smoother
       for (unsigned int i = 0; i < _n_smoothing_steps; ++i)
+      {
         smoother->apply(b, x);
+        std::cout << "x: " << x.l2_norm() << std::endl;
+      }
       timer_leave_subsection(_timer);
     }
   }
