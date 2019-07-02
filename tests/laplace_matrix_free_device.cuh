@@ -34,21 +34,30 @@
 
 #include "laplace_matrix_free.hpp"
 
-template <int dim, int fe_degree>
+template <int dim, int fe_degree, typename ScalarType>
 class LaplaceOperatorQuad
 {
 public:
+  __device__ LaplaceOperatorQuad(ScalarType coef)
+: _coef(coef)
+{}
+
   __device__ void
-  operator()(dealii::CUDAWrappers::FEEvaluation<dim, fe_degree> *fe_eval,
+  operator()(dealii::CUDAWrappers::FEEvaluation<dim, fe_degree, fe_degree+1, 1, ScalarType> *fe_eval,
              const unsigned int q) const;
+
+private:
+ScalarType _coef;
 };
 
-template <int dim, int fe_degree>
-__device__ void LaplaceOperatorQuad<dim, fe_degree>::
-operator()(dealii::CUDAWrappers::FEEvaluation<dim, fe_degree> *fe_eval,
+template <int dim, int fe_degree, typename ScalarType>
+__device__ void LaplaceOperatorQuad<dim, fe_degree, ScalarType>::
+operator()(dealii::CUDAWrappers::FEEvaluation<dim, fe_degree, fe_degree+1, 1, ScalarType> *fe_eval,
            const unsigned int q) const
 {
-  fe_eval->submit_gradient(fe_eval->get_gradient(q), q);
+  dealii::Tensor<1, dim, ScalarType> tmp = fe_eval->get_gradient(q);
+  tmp *= _coef;
+  fe_eval->submit_gradient(tmp, q);
 }
 
 template <int dim, int fe_degree, typename ScalarType>
@@ -66,6 +75,9 @@ public:
   static unsigned int const n_local_dofs =
       dim == 2 ? n_dofs_1d * n_dofs_1d : n_dofs_1d * n_dofs_1d * n_dofs_1d;
   static unsigned int const n_q_points = n_local_dofs;
+
+private:
+ScalarType * _coef;
 };
 
 template <int dim, int fe_degree, typename ScalarType>
@@ -76,6 +88,9 @@ __device__ void LocalLaplaceOperator<dim, fe_degree, ScalarType>::operator()(
     dealii::CUDAWrappers::SharedData<dim, ScalarType> *shared_data,
     ScalarType const *src, ScalarType *dst) const
 {
+    const unsigned int pos = dealii::CUDAWrappers::local_q_point_id<dim, double>(
+      cell, gpu_data, n_dofs_1d, n_q_points);
+
   dealii::CUDAWrappers::FEEvaluation<dim, fe_degree, fe_degree + 1, 1,
                                      ScalarType>
       fe_eval(cell, gpu_data, shared_data);
@@ -85,7 +100,7 @@ __device__ void LocalLaplaceOperator<dim, fe_degree, ScalarType>::operator()(
   bool const integrate_values = false;
   bool const integrate_gradients = true;
   fe_eval.evaluate(evaluate_values, evaluate_gradients);
-  fe_eval.apply_quad_point_operations(LaplaceOperatorQuad<dim, fe_degree>());
+  fe_eval.apply_quad_point_operations(LaplaceOperatorQuad<dim, fe_degree, ScalarType>(_coef[pos]));
   fe_eval.integrate(integrate_values, integrate_gradients);
   fe_eval.distribute_local_to_global(dst);
 }

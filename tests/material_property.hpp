@@ -12,36 +12,22 @@
 #ifndef MFMG_MATERIAL_PROPERTY_HPP
 #define MFMG_MATERIAL_PROPERTY_HPP
 
-#include <deal.II/base/function.h>
+
+#include <mfmg/common/exceptions.hpp>
 #include <deal.II/base/vectorization.h>
 
 template <int dim>
-class Source final : public dealii::Function<dim>
+class Coefficient //: public dealii::Function<dim>
 {
 public:
-  Source() = default;
-
-  virtual ~Source() override = default;
-
-  virtual double value(dealii::Point<dim> const &,
-                       unsigned int const = 0) const override
-  {
-    return 0.;
-  }
-};
-
-template <int dim>
-class Coefficient : public dealii::Function<dim>
-{
-public:
-  virtual ~Coefficient() override = default;
+  virtual ~Coefficient() /*override*/ = default;
 
   virtual dealii::VectorizedArray<double>
   value(dealii::Point<dim, dealii::VectorizedArray<double>> const &p,
         unsigned int const = 0) const = 0;
 
-  virtual double value(dealii::Point<dim> const &p,
-                       unsigned int const component = 0) const override = 0;
+  virtual DEAL_II_CUDA_HOST_DEV double value(dealii::Point<dim> const &p,
+                       unsigned int const component = 0) const /*override*/ = 0;
 };
 
 template <int dim>
@@ -59,7 +45,7 @@ public:
     return dealii::make_vectorized_array<double>(1.);
   }
 
-  virtual double value(dealii::Point<dim> const &,
+  virtual DEAL_II_CUDA_HOST_DEV double value(dealii::Point<dim> const &,
                        unsigned int const = 0) const override
   {
     return 1.;
@@ -82,7 +68,7 @@ public:
     return one + std::abs(p[0]);
   }
 
-  virtual double value(dealii::Point<dim> const &p,
+  virtual DEAL_II_CUDA_HOST_DEV double value(dealii::Point<dim> const &p,
                        unsigned int const = 0) const override
   {
     return 1. + std::abs(p[0]);
@@ -109,7 +95,7 @@ public:
     return val;
   }
 
-  virtual double value(dealii::Point<dim> const &p,
+  virtual DEAL_II_CUDA_HOST_DEV double value(dealii::Point<dim> const &p,
                        unsigned int const = 0) const override
   {
     double val = 1.;
@@ -147,7 +133,7 @@ public:
     return return_value;
   }
 
-  virtual double value(dealii::Point<dim> const &p,
+  virtual DEAL_II_CUDA_HOST_DEV double value(dealii::Point<dim> const &p,
                        unsigned int const = 0) const override
 
   {
@@ -182,5 +168,30 @@ public:
     }
   }
 };
+
+template <int dim>
+class DeviceMaterialPropertyFactory
+{
+public:
+  static std::shared_ptr<Coefficient<dim>>
+  create_material_property(std::string const &material_type)
+  {
+    if (material_type == "constant")
+      return std::make_shared<ConstantMaterialProperty<dim>>();
+    else if (material_type == "linear_x")
+      return std::make_shared<LinearXMaterialProperty<dim>>();
+    else if (material_type == "linear")
+      return std::make_shared<LinearMaterialProperty<dim>>();
+    else if (material_type == "discontinuous")
+      return std::make_shared<DiscontinuousMaterialProperty<dim>>();
+    else
+    {
+      mfmg::ASSERT_THROW_NOT_IMPLEMENTED();
+
+      return nullptr;
+    }
+  }
+};
+
 
 #endif

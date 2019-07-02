@@ -17,6 +17,43 @@
 #include "laplace_matrix_free_device.cuh"
 #include "material_property.hpp"
 
+
+template <int dim, int fe_degree, class MaterialProperty>
+class CoefficientFunctor
+  {
+  public:
+    CoefficientFunctor(MaterialProperty const & material_property, double *coefficient)
+      : _material_property(material_property), _coef(coefficient)
+    {}
+    __device__ void operator()(
+      const unsigned int                                          cell,
+      const typename dealii::CUDAWrappers::MatrixFree<dim, double>::Data *gpu_data);
+    static const unsigned int n_dofs_1d = fe_degree + 1;
+    static const unsigned int n_local_dofs =
+      dealii::Utilities::pow(n_dofs_1d, dim);
+    static const unsigned int n_q_points =
+      dealii::Utilities::pow(n_dofs_1d, dim);
+  private:
+    MaterialProperty const & _material_property;
+    double * _coef;
+  };
+  template <int dim, int fe_degree, class MaterialProperty>
+  __device__ void CoefficientFunctor<dim, fe_degree, MaterialProperty>::operator()(
+    const unsigned int                                          cell,
+    const typename dealii::CUDAWrappers::MatrixFree<dim, double>::Data *gpu_data)
+  {
+    const unsigned int pos = dealii::CUDAWrappers::local_q_point_id<dim, double>(
+      cell, gpu_data, n_dofs_1d, n_q_points);
+    const auto dummy =
+      dealii::CUDAWrappers::get_quadrature_point<dim, double>(cell,
+                                                      gpu_data,
+                                                      n_dofs_1d);
+    //const dealii::Point<dim> q_point (dummy);
+    _coef[pos] = _material_property.value(dummy);
+  }
+
+
+
 template <int dim>
 class TestMeshEvaluator final : public mfmg::CudaMeshEvaluator<dim>
 {
@@ -197,10 +234,17 @@ public:
     additional_data.mapping_update_flags = dealii::update_gradients |
                                            dealii::update_JxW_values |
                                            dealii::update_quadrature_points;
-    std::shared_ptr<dealii::CUDAWrappers::MatrixFree<dim, ScalarType>>
-        mf_storage(new dealii::CUDAWrappers::MatrixFree<dim, ScalarType>());
+    auto mf_storage = std::make_shared<dealii::CUDAWrappers::MatrixFree<dim, ScalarType>>();
     mf_storage->reinit(dof_handler, _agg_constraints,
                        dealii::QGauss<1>(fe_degree + 1), additional_data);
+
+    const unsigned int n_owned_cells =
+      dynamic_cast<const dealii::parallel::Triangulation<dim> *>(
+        &dof_handler.get_triangulation())
+        ->n_locally_owned_active_cells();
+    _coef.reinit(dealii::Utilities::pow(fe_degree + 1, dim) * n_owned_cells);
+    const CoefficientFunctor<dim, fe_degree, decltype(*_material_property)> functor(*_material_property, _coef.get_values());
+    mf_storage->evaluate_coefficients(functor);
 
     _agg_laplace_operator =
         std::make_unique<LaplaceOperatorDevice<dim, fe_degree, ScalarType>>(
@@ -208,7 +252,6 @@ public:
     // TODO
     // _agg_laplace_operator->initialize(mf_storage);
     // _agg_laplace_operator->evaluate_coefficient(*_material_property);
-    // _agg_laplace_operator->compute_diagonal();
     // At the current time there is no easy way to extract the diagonal using
     // CUDA and Matrix-Free. So we have to do it on the host.
     typename dealii::MatrixFree<dim, ScalarType>::AdditionalData
@@ -311,5 +354,6 @@ private:
   mutable dealii::LinearAlgebra::distributed::Vector<ScalarType,
                                                      dealii::MemorySpace::CUDA>
       _distributed_src;
+  mutable dealii::LinearAlgebra::CUDAWrappers::Vector<ScalarType> _coef;
 };
 #endif

@@ -49,7 +49,7 @@ double test_mf(std::shared_ptr<boost::property_tree::ptree> params)
   auto material_property =
       MaterialPropertyFactory<dim>::create_material_property(
           params->get<std::string>("material_property.type"));
-  Source<dim> source;
+  dealii::ZeroFunction<dim> source;
 
   auto laplace_ptree = params->get_child("laplace");
   int constexpr fe_degree = 1;
@@ -130,7 +130,7 @@ double test(std::shared_ptr<boost::property_tree::ptree> params)
   auto material_property =
       MaterialPropertyFactory<dim>::create_material_property(
           params->get<std::string>("material_property.type"));
-  Source<dim> source;
+  dealii::ZeroFunction<dim> source;
 
   auto laplace_ptree = params->get_child("laplace");
   auto fe_degree = laplace_ptree.get<unsigned>("fe_degree", 1);
